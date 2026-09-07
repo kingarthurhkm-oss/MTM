@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b171d">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>PENINSULA 2026</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand"><svg viewBox="0 0 40 44" aria-hidden="true"><path d="M20 2 37 12v20L20 42 3 32V12Z"/><path d="M12 17h16v11H12Zm0 0 16 11m0-11L12 28"/></svg><div><h1>PENINSULA <span>2026</span></h1><p>한반도 다영역 전략 · 가상 시나리오</p></div></div>
+      <div class="header-right"><span class="status-dot"></span><span id="phase-label">대한민국 · 명령 단계</span><button id="menu-button" class="icon-btn" aria-label="메뉴 열기">☰</button></div>
+    </header>
+    <section class="metrics" aria-label="작전 현황">
+      <div class="metric"><label>민간 보호</label><strong id="civilian-value">100<span>%</span></strong><div class="meter"><i id="civilian-meter"></i></div></div>
+      <div class="metric"><label>기반시설 가동</label><strong id="infra-value">100<span>%</span></strong><div class="meter"><i id="infra-meter"></i></div></div>
+      <div class="metric"><label>전선 보급</label><strong id="supply-value">100<span>%</span></strong><div class="meter"><i id="supply-meter"></i></div></div>
+      <div class="metric crisis"><label>위기 수준</label><strong id="crisis-value">18<span>/100</span></strong><div class="meter"><i id="crisis-meter"></i></div></div>
+      <div class="resources"><span>지휘점 <b id="cp-value">9</b></span><span>복구 자재 <b id="materials-value">80</b></span><span>예비 보급 <b id="reserve-value">150</b></span></div>
+    </section>
+    <main>
+      <section id="map-section" aria-label="작전 지도">
+        <div class="map-top"><div class="segmented" role="group" aria-label="지도 레이어"><button data-layer="operations" class="active">작전</button><button data-layer="supply">보급</button><button data-layer="infrastructure">기반시설</button></div><button id="theater-button" class="subtle-btn">동북아 전체 ↗</button></div>
+        <canvas id="map" tabindex="0" aria-label="한반도 헥스 지도. 부대 목록에서도 선택과 명령을 내릴 수 있습니다."></canvas>
+        <div class="map-title"><span class="eyebrow">KOREAN PENINSULA</span><p id="map-caption">120 × 240 HEX · 28,800 TILES</p></div>
+        <div class="map-objectives" id="map-objectives"></div>
+        <div class="map-controls"><button id="zoom-in" aria-label="지도 확대">+</button><button id="zoom-out" aria-label="지도 축소">−</button><button id="center-button" aria-label="한반도 중심으로 이동"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 1v7m0 8v7M1 12h7m8 0h7"/></svg></button></div>
+        <div class="map-legend"><span><i class="blue-dot"></i>대한민국</span><span><i class="red-dot"></i>북한</span><span class="foreign-legend">▨ 외국 영토 · 진입 불가</span></div>
+        <canvas id="minimap" width="170" height="145" aria-label="전체 지도 미니맵"></canvas>
+        <div id="map-hint">부대 선택 → 이동 또는 공격 → 턴 종료</div>
+        <div id="coordinate-label">—</div>
+      </section>
+      <aside id="sidebar">
+        <nav class="tabs" aria-label="지휘 패널"><button data-tab="command" class="active">지휘</button><button data-tab="forces">부대 <span id="unit-count"></span></button><button data-tab="infra">시설</button><button data-tab="log">기록</button></nav>
+        <div id="panel-content"></div>
+      </aside>
+    </main>
+    <footer>
+      <div class="turn-block"><span class="eyebrow">TURN</span><strong id="turn-value">01</strong><div><span id="weather-value">맑음</span><small>최대 45턴</small></div></div>
+      <div class="footer-objective"><span id="objective-value">통제 구역 0 / 3</span><small>각 구역을 2턴 유지 · 보호 70% / 시설 60% 목표</small></div>
+      <div class="footer-actions"><button id="save-button" class="subtle-btn">저장</button><button id="end-turn">턴 종료 <span>→</span></button></div>
+    </footer>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <dialog id="modal"><div id="modal-content"></div></dialog>
+  <input id="import-input" type="file" accept=".json,application/json" hidden>
+  <script type="module" src="ui.js"></script>
+</body>
+</html>

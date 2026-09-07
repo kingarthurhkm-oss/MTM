@@ -1,0 +1,86 @@
+{
+  "blue-army": {
+    "sidc": "SFGPUCI----I---",
+    "standard": "APP6",
+    "echelon": "Division",
+    "dimension": "Ground"
+  },
+  "blue-armor": {
+    "sidc": "SFGPUCA----I---",
+    "standard": "APP6",
+    "echelon": "Division",
+    "dimension": "Ground"
+  },
+  "blue-air": {
+    "sidc": "SFAPMF---------",
+    "standard": "APP6",
+    "echelon": "",
+    "dimension": "Air"
+  },
+  "blue-navy": {
+    "sidc": "SFSPC----------",
+    "standard": "APP6",
+    "echelon": "",
+    "dimension": "Sea"
+  },
+  "blue-airdefense": {
+    "sidc": "SFGPUCD----H---",
+    "standard": "APP6",
+    "echelon": "Brigade",
+    "dimension": "Ground"
+  },
+  "blue-transport": {
+    "sidc": "SFSPN----------",
+    "standard": "APP6",
+    "echelon": "",
+    "dimension": "Sea"
+  },
+  "blue-supply": {
+    "sidc": "SFGPUS---------",
+    "standard": "APP6",
+    "echelon": "",
+    "dimension": "Ground"
+  },
+  "red-army": {
+    "sidc": "SHGPUCI----I---",
+    "standard": "APP6",
+    "echelon": "Division",
+    "dimension": "Ground"
+  },
+  "red-armor": {
+    "sidc": "SHGPUCA----I---",
+    "standard": "APP6",
+    "echelon": "Division",
+    "dimension": "Ground"
+  },
+  "red-air": {
+    "sidc": "SHAPMF---------",
+    "standard": "APP6",
+    "echelon": "",
+    "dimension": "Air"
+  },
+  "red-navy": {
+    "sidc": "SHSPC----------",
+    "standard": "APP6",
+    "echelon": "",
+    "dimension": "Sea"
+  },
+  "red-airdefense": {
+    "sidc": "SHGPUCD----H---",
+    "standard": "APP6",
+    "echelon": "Brigade",
+    "dimension": "Ground"
+  },
+  "red-transport": {
+    "sidc": "SHSPN----------",
+    "standard": "APP6",
+    "echelon": "",
+    "dimension": "Sea"
+  },
+  "red-supply": {
+    "sidc": "SHGPUS---------",
+    "standard": "APP6",
+    "echelon": "",
+    "dimension": "Ground"
+  }
+}
