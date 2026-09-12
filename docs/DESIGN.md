@@ -6,7 +6,7 @@
 
 ## 지도와 좌표
 
-120열 × 240행의 odd-q offset 헥스입니다. 큐브 좌표로 인접성과 거리를 계산합니다. 경로는 우선순위 큐를 사용한 Dijkstra 탐색입니다. 지도는 동경 118–147, 북위 24–46을 Mercator 좌표로 투영합니다. 렌더링은 단일 Canvas, 캐시한 지형 이미지, 가시 영역 타일과 부대만 사용합니다. 저장 데이터에는 실제 경위도 기반 군사 배치가 없습니다.
+240열 × 480행의 odd-q offset 헥스입니다. 큐브 좌표로 인접성과 거리를 계산합니다. 경로는 우선순위 큐를 사용한 Dijkstra 탐색입니다. 지도는 동경 118–147, 북위 24–46을 Mercator 좌표로 투영합니다. 렌더링은 단일 Canvas, 캐시한 지형 이미지, 가시 영역 타일과 부대만 사용합니다. 저장 데이터에는 실제 경위도 기반 군사 배치가 없습니다.
 
 ## 기반시설 연계
 
@@ -43,3 +43,12 @@ Android는 API 26 이상을 대상으로 하고, 고정 `appassets.androidplatfo
 ## 남은 제품 확장 영역
 
 멀티플레이, 대규모 캠페인 편집기, 오디오, 접근성용 지도 대체 이동 UI, 게임패드, Google Play 배포, 실제 기기 성능 계측은 이 버전의 범위에 포함되지 않습니다. 현실 군사·시설 데이터로 게임 수치를 대체하는 기능도 제공하지 않습니다.
+
+
+## Map resolution update
+
+The grid is 240 × 480 (115,200 cells), resampled from the existing country polygons without changing the geographic extent. The contiguous Korean land span near latitude 38° is at least 20 tiles wide. Municipal Army anchors are mapped from their previous representative game positions to the nearest South Korean land tile; `legacyHex` retains the original 120 × 240 anchor for save validation. Procedural forces, facilities and objectives are generated on the new grid. Movement and attack ranges remain expressed in tiles.
+
+Save format v2 imports v1 by validating on the retained 120 × 240 mask first, then converting unit positions and territorial control. Facilities and objectives map by stable ID; aircraft at facilities, ships at ports and embarked passengers retain their relationships. Turn, resources, unit health and supply remain unchanged. The importer validates the converted save before replacing the active state.
+
+Run `python3 tools/build-geography.py` to rebuild offline from bundled polygons, `python3 tools/build-army-data.py` after editing the catalog, `npm test`, and `npm run standalone`. Map-specific regression tests include original v1 fixtures for both scenarios.

@@ -1,9 +1,11 @@
 import { GEOGRAPHY } from './geography.js';
+import { ARMY_DATA, ARMY_SCENARIO, armyFormation, armyTile, armyUnitSpec } from './army.js';
 
-export const VERSION = 1;
+export const VERSION = 2;
 export const TYPES = {
   army: {name:'보병사단', domain:'land', mp:9, attack:17, defense:16, range:1},
   armor: {name:'기갑사단', domain:'land', mp:12, attack:22, defense:18, range:1},
+  artillery: {name:'포병여단', domain:'land', mp:8, attack:23, defense:10, range:3},
   air: {name:'전투비행단', domain:'air', mp:1, attack:19, defense:12, range:24},
   navy: {name:'해군전단', domain:'sea', mp:16, attack:21, defense:19, range:4},
   airdefense: {name:'방공여단', domain:'land', mp:7, attack:0, defense:15, range:9},
@@ -31,13 +33,14 @@ class Heap {
 }
 
 export class Board {
-  constructor(){
-    this.cols=GEOGRAPHY.columns;this.rows=GEOGRAPHY.rows;
+  constructor(geography=GEOGRAPHY){
+    this.geography=geography;
+    this.cols=geography.columns;this.rows=geography.rows;
     this.width=2400;
     this.mercTop=this.merc(46);this.mercBottom=this.merc(24);
     this.height=this.width*(this.mercTop-this.mercBottom)/(29*Math.PI/180);
     this.dx=this.width/(this.cols-1);this.dy=this.height/(this.rows-.5);
-    const owners=[];const r=GEOGRAPHY.ownersRLE;
+    const owners=[];const r=geography.ownersRLE;
     for(let i=0;i<r.length;i+=2)for(let j=0;j<r[i+1];j++)owners.push(r[i]);
     this.tiles=owners.map((home,id)=>{
       const q=id%this.cols,row=Math.floor(id/this.cols);
@@ -67,10 +70,13 @@ export class Board {
 }
 
 export class Game {
-  constructor(seed=2026){this.board=new Board();this.seed=seed>>>0;this.state=null;this.supplyCache={};this.newGame(seed);}
+  constructor(seed=2026,scenario=ARMY_SCENARIO,board=new Board()){this.board=board;this.seed=seed>>>0;this.state=null;this.supplyCache={};this.newGame(seed,scenario);}
   random(){let x=this.state.rng;x^=x<<13;x^=x>>>17;x^=x<<5;this.state.rng=x>>>0;return this.state.rng/4294967296;}
   log(text,kind='info'){this.state.log.unshift({turn:this.state.turn,text,kind});this.state.log.length=Math.min(90,this.state.log.length);}
   unit(id){return this.state.units.find(u=>u.id===id);}
+  formation(unit){return unit?.formationId?armyFormation(unit.formationId):null;}
+  spec(unit){return armyUnitSpec(TYPES[unit.type],this.formation(unit));}
+  reconRadius(unit){const f=this.formation(unit);return f?4+Math.floor(f.reconnaissance/25):unit.type==='air'?12:unit.type==='navy'?7:6;}
   alive(side){return this.state.units.filter(u=>u.hp>0&&(!side||u.side===side));}
   at(id){return this.alive().filter(u=>u.tile===id&&!u.embarked);}
   owned(t,side){return this.state.control[t]===SIDE[side];}
@@ -81,8 +87,9 @@ export class Game {
     const y=Math.min(...ys)+(Math.max(...ys)-Math.min(...ys))*fy;
     return candidates.filter(t=>!used.has(t.id)).sort((a,b)=>(a.x-x)**2+(a.y-y)**2-((b.x-x)**2+(b.y-y)**2))[0];
   }
-  newGame(seed=2026){
-    this.state={version:VERSION,seed:seed>>>0,rng:(seed>>>0)||2026,turn:1,phase:'player',control:this.board.tiles.map(t=>t.home),
+  newGame(seed=2026,scenario=ARMY_SCENARIO){
+    if(!['legacy',ARMY_SCENARIO].includes(scenario))throw Error('지원하지 않는 시나리오입니다.');
+    this.state={version:this.board.cols===120?1:VERSION,seed:seed>>>0,rng:(seed>>>0)||2026,turn:1,phase:'player',control:this.board.tiles.map(t=>t.home),
       units:[],sites:[],objectives:[],log:[],cp:9,materials:80,reserve:150,civilians:100,cohesion:100,escalation:18,
       losses:{blue:0,red:0},weather:'맑음',posture:'balanced',policyUsed:[],airCover:0,recon:0,navalCover:0,cyberShield:0,
       lastReport:null,result:null};
@@ -131,8 +138,19 @@ export class Game {
       const t=this.pick('red',.5,fy);
       this.state.objectives.push({id:`sector-${i+1}`,tile:t.id,name:['남부 통제 구역','중부 통제 구역','북부 통제 구역'][i],held:0});
     }
+    if(scenario===ARMY_SCENARIO){
+      this.state.scenario=ARMY_SCENARIO;this.state.datasetVersion=ARMY_DATA.dataset_version;
+      // Replace only the fictional blue combat formations; all legacy support systems remain.
+      this.state.units=this.state.units.filter(u=>u.side!=='blue'||!['army','armor','airdefense'].includes(u.type));
+      for(const formation of ARMY_DATA.units.filter(f=>f.deployable)){
+        this.addUnit('blue',formation.game_type,armyTile(this.board,formation),formation.id);
+        const unit=this.state.units.at(-1);
+        unit.id=`blue-rok-${formation.id}`;unit.name=formation.unit_name;unit.formationId=formation.id;unit.ap=this.spec(unit).mp;
+      }
+    }
     this.rebuildRoads();this.refreshSupply();
     this.log('가상 시나리오 시작. 구역 3곳을 2턴 유지하고 민간 보호와 기반시설을 보존하세요.');
+    if(scenario===ARMY_SCENARIO)this.log('공개 육군 편제 · 시군 대표 권역과 게임 상대 점수 사용. 지원전력·적군·시설·작전은 가상입니다.');
   }
   addUnit(side,type,tile,index){
     const name=`${side==='blue'?'청':'홍'}-${String(index).padStart(2,'0')} ${TYPES[type].name}`;
@@ -240,10 +258,10 @@ export class Game {
     return Math.max(0,1-d/40);
   }
   supplyPath(u){const parent=this.supplyCache[u.side]?.parent;if(!parent)return[];const out=[u.tile];let i=u.tile;for(let k=0;k<100&&parent[i]>=0;k++){i=parent[i];out.push(i);}return out;}
-  visible(u){if(u.side==='blue')return true;return this.state.recon>0||this.alive('blue').some(a=>this.board.distance(a.tile,u.tile)<=(a.type==='air'?12:a.type==='navy'?7:6));}
+  visible(u){if(u.side==='blue')return true;return this.state.recon>0||this.alive('blue').some(a=>this.board.distance(a.tile,u.tile)<=this.reconRadius(a));}
   canAttack(u,v){
     if(!u||!v||u.hp<=0||v.hp<=0||u.side===v.side||u.acted||u.embarked||v.embarked)return false;
-    const spec=TYPES[u.type];if(!spec.attack||u.ap<(u.type==='air'?1:3))return false;
+    const spec=this.spec(u);if(!spec.attack||u.ap<(u.type==='air'?1:3))return false;
     if(u.side==='blue'&&!this.visible(v))return false;
     if(u.type==='air'&&this.supplyQuality(u)<.25)return false;
     const ud=spec.domain,vd=TYPES[v.type].domain;
@@ -256,9 +274,9 @@ export class Game {
     const posture=u.side==='blue'?this.state.posture:'balanced';
     const factors={careful:.82,balanced:1,push:1.2};
     const cover=this.alive(u.side).some(a=>a.type==='air'&&a.mission==='support')?1.2:1;
-    const a=TYPES[u.type].attack*(u.hp/100)*(.35+.65*u.supply/100)*factors[posture]*cover;
+    const a=this.spec(u).attack*(u.hp/100)*(.35+.65*u.supply/100)*factors[posture]*cover;
     const terrain=this.board.tiles[v.tile].terrain==='mountain'?1.28:1;
-    const d=TYPES[v.type].defense*(.3+.7*v.hp/100)*(.45+.55*v.supply/100)*terrain*(v.entrenched?1.3:1);
+    const d=this.spec(v).defense*(.3+.7*v.hp/100)*(.45+.55*v.supply/100)*terrain*(v.entrenched?1.3:1);
     const ratio=a/Math.max(1,d);
     return {ratio,band:ratio<.67?'불리':ratio<1.25?'접전':ratio<2?'우세':'크게 우세',posture};
   }
@@ -272,7 +290,7 @@ export class Game {
     const column=ratio<.5?0:ratio<.8?1:ratio<1.2?2:ratio<1.8?3:ratio<2.8?4:5;
     const outgoing=[10,17,24,32,41,50][column]+die*2;
     const incoming=[28,22,16,12,9,6][column]+(7-die);
-    const remote=['air','navy'].includes(u.type)&&TYPES[v.type].domain==='land';
+    const remote=(['air','navy'].includes(u.type)||(u.type==='artillery'&&this.board.distance(u.tile,v.tile)>1))&&TYPES[v.type].domain==='land';
     const aa=this.alive(v.side).filter(a=>a.type==='airdefense'&&this.board.distance(a.tile,v.tile)<=9).length;
     const taken=u.type==='air'?7+aa*7:remote?3:incoming;
     v.hp=clamp(v.hp-outgoing);u.hp=clamp(u.hp-taken);
@@ -393,7 +411,8 @@ export class Game {
     const before={civilians:s.civilians,integrity:this.integrity(),escalation:s.escalation};
     s.phase='resolution';this.aiTurn();this.pressureEvent();this.refreshSupply();
     for(const u of this.alive()){
-      const quality=this.supplyQuality(u);u.supply=clamp(u.supply+quality*32-18);
+      const quality=this.supplyQuality(u),logistics=this.formation(u)?.logistics??60;
+      u.supply=clamp(u.supply+quality*(32+(logistics-60)/10)-18);
       if(u.supply<20){u.hp=clamp(u.hp-4);if(u.side==='blue')s.cohesion=clamp(s.cohesion-.3);}
       else if(u.entrenched&&u.supply>60)u.hp=clamp(u.hp+5);
       if(u.type==='supply')u.cargo=Math.max(0,u.cargo-5);
@@ -401,7 +420,7 @@ export class Game {
         const n=Math.min(20,80-u.cargo,u.side==='blue'?s.reserve:20);u.cargo+=n;if(u.side==='blue')s.reserve-=n;
       }
       if(u.type==='air'&&!this.owned(u.tile,u.side)){u.hp=0;this.log(`${u.name} 기지 상실로 전투 이탈.`,'danger');}
-      u.ap=TYPES[u.type].mp*(u.supply<30?.65:1);u.acted=false;u.mission=null;
+      u.ap=this.spec(u).mp*(u.supply<30?.65:1);u.acted=false;u.mission=null;
     }
     for(const obj of s.objectives)obj.held=this.owned(obj.tile,'blue')?obj.held+1:0;
     s.turn++;s.weather=['맑음','맑음','강우','안개','폭풍'][Math.floor(this.random()*5)];
@@ -430,7 +449,42 @@ export class Game {
   import(text){
     if(typeof text!=='string'||text.length>2_000_000)throw Error('저장 파일 크기가 올바르지 않습니다.');
     const s=JSON.parse(text);
-    if(s.version!==VERSION||!Number.isInteger(s.turn)||s.turn<1||s.turn>46||s.phase!=='player'||!Array.isArray(s.control)||s.control.length!==this.board.tiles.length)throw Error('지원하지 않는 저장 파일입니다.');
+    if(!s||typeof s!=='object')throw Error('지원하지 않는 저장 파일입니다.');
+    // Validate the complete old save on its original grid before converting anything.
+    if(s.version===1&&this.board.cols!==120){
+      const old=new Game(s.seed,s.scenario??'legacy',new Board(GEOGRAPHY.legacyMap));
+      old.import(text);
+      const fresh=new Game(s.seed,s.scenario??'legacy',new Board(this.board.geography)).state;
+      const nearest=(tile,predicate)=>{
+        const origin=old.board.tiles[tile];let best=null,d=Infinity;
+        for(const t of this.board.tiles){if(!predicate(t))continue;const dd=(t.x-origin.x)**2+(t.y-origin.y)**2;if(dd<d){best=t;d=dd;}}
+        if(!best)throw Error('이전 부대 위치를 변환하지 못했습니다.');
+        return best.id;
+      };
+      s.control=this.board.tiles.map(t=>{
+        if(t.sea||t.foreign)return t.home;
+        const k=old.board.closest(t.x,t.y),prior=old.board.tiles[k];
+        return prior&&prior.home===t.home?s.control[k]:t.home;
+      });
+      for(const u of s.units){
+        const prior=old.board.tiles[u.tile];
+        const site=s.sites.find(v=>v.tile===u.tile);
+        const port=prior.sea?s.sites.find(v=>v.kind==='port'&&old.board.distance(v.tile,u.tile)===1):null;
+        if(site)u.tile=fresh.sites.find(v=>v.id===site.id).tile;
+        else if(port){
+          const anchor=fresh.sites.find(v=>v.id===port.id).tile;
+          u.tile=nearest(u.tile,t=>t.sea&&this.board.links[anchor].includes(t.id));
+        }else u.tile=nearest(u.tile,t=>t.home===prior.home);
+      }
+      for(const u of s.units)if(u.embarked)u.tile=s.units.find(v=>v.id===u.embarked).tile;
+      for(const site of s.sites)site.tile=fresh.sites.find(v=>v.id===site.id).tile;
+      for(const objective of s.objectives)objective.tile=fresh.objectives.find(v=>v.id===objective.id).tile;
+      s.version=VERSION;
+      return this.import(JSON.stringify(s));
+    }
+    const scenario=s.scenario??'legacy';
+    if(!['legacy',ARMY_SCENARIO].includes(scenario)||(scenario===ARMY_SCENARIO&&s.datasetVersion!==ARMY_DATA.dataset_version))throw Error('지원하지 않는 편제 데이터 버전입니다.');
+    if(s.version!==(this.board.cols===120?1:VERSION)||!Number.isInteger(s.turn)||s.turn<1||s.turn>46||s.phase!=='player'||!Array.isArray(s.control)||s.control.length!==this.board.tiles.length)throw Error('지원하지 않는 저장 파일입니다.');
     for(let i=0;i<s.control.length;i++){
       const home=this.board.tiles[i].home,value=s.control[i];
       if(home===0?value!==0:home===3?value!==3:![1,2].includes(value))throw Error('지도 통제 데이터가 손상되었습니다.');
@@ -443,11 +497,14 @@ export class Game {
     if(!['맑음','강우','안개','폭풍'].includes(s.weather))throw Error('기상 데이터가 올바르지 않습니다.');
     if(!s.losses||!validNum(s.losses.blue,0,1e7)||!validNum(s.losses.red,0,1e7))throw Error('전력 데이터가 올바르지 않습니다.');
     for(const k of ['airCover','recon','navalCover','cyberShield'])if(!validNum(s[k],0,10))throw Error('지원 상태가 올바르지 않습니다.');
-    if(!Array.isArray(s.units)||s.units.length!==this.state.units.length||!Array.isArray(s.sites)||s.sites.length!==this.state.sites.length||!Array.isArray(s.objectives)||s.objectives.length!==3)throw Error('시나리오 구성이 올바르지 않습니다.');
+    // Compare with an immutable scenario template, not the currently running scenario.
+    const template=new Game(s.seed,scenario,new Board(this.board.geography)).state;
+    if(!Array.isArray(s.units)||s.units.length!==template.units.length||!Array.isArray(s.sites)||s.sites.length!==template.sites.length||!Array.isArray(s.objectives)||s.objectives.length!==3)throw Error('시나리오 구성이 올바르지 않습니다.');
     const unitIds=new Set();
     for(const u of s.units){
-      const original=this.state.units.find(v=>v.id===u.id);
+      const original=template.units.find(v=>v.id===u.id);
       if(!original||unitIds.has(u.id)||u.type!==original.type||u.side!==original.side||typeof u.name!=='string'||u.name.length>80)throw Error('부대 구성이 올바르지 않습니다.');unitIds.add(u.id);
+      if(u.formationId!==original.formationId||(u.formationId&&u.name!==original.name)||['mobility','firepower','armor','reconnaissance','logistics','gameSpec','stat_profile'].some(k=>k in u))throw Error('편제 참조 데이터가 올바르지 않습니다.');
       const t=this.board.tiles[u.tile];if(!Number.isInteger(u.tile)||!t||t.foreign||(u.hp>0&&!u.embarked&&TYPES[u.type].domain!=='air'&&(TYPES[u.type].domain==='sea')!==t.sea))throw Error('부대 위치가 올바르지 않습니다.');
       if(!validNum(u.hp,0,100)||!validNum(u.supply,0,100)||!validNum(u.ap,0,20)||!validNum(u.cargo,0,100)||![null,'patrol','recon','support'].includes(u.mission)||typeof u.acted!=='boolean'||typeof u.entrenched!=='boolean')throw Error('부대 상태가 올바르지 않습니다.');
     }
@@ -456,8 +513,8 @@ export class Game {
       if(u.passenger){const p=s.units.find(x=>x.id===u.passenger);if(u.type!=='transport'||!p||p.embarked!==u.id)throw Error('승선 상태가 손상되었습니다.');}
     }
     const siteIds=new Set();
-    for(const f of s.sites){const orig=this.state.sites.find(x=>x.id===f.id);if(!orig||siteIds.has(f.id)||f.tile!==orig.tile||f.home!==orig.home||f.kind!==orig.kind||typeof f.name!=='string'||f.name.length>80||!validNum(f.health,0,100)||!validNum(f.shelter,0,1))throw Error('시설 데이터가 손상되었습니다.');siteIds.add(f.id);}
-    const objIds=new Set();for(const o of s.objectives){const orig=this.state.objectives.find(x=>x.id===o.id);if(!orig||objIds.has(o.id)||o.tile!==orig.tile||typeof o.name!=='string'||o.name.length>80||!Number.isInteger(o.held)||o.held<0||o.held>46)throw Error('목표 데이터가 손상되었습니다.');objIds.add(o.id);}
+    for(const f of s.sites){const orig=template.sites.find(x=>x.id===f.id);if(!orig||siteIds.has(f.id)||f.tile!==orig.tile||f.home!==orig.home||f.kind!==orig.kind||typeof f.name!=='string'||f.name.length>80||!validNum(f.health,0,100)||!validNum(f.shelter,0,1))throw Error('시설 데이터가 손상되었습니다.');siteIds.add(f.id);}
+    const objIds=new Set();for(const o of s.objectives){const orig=template.objectives.find(x=>x.id===o.id);if(!orig||objIds.has(o.id)||o.tile!==orig.tile||typeof o.name!=='string'||o.name.length>80||!Number.isInteger(o.held)||o.held<0||o.held>46)throw Error('목표 데이터가 손상되었습니다.');objIds.add(o.id);}
     if(!Array.isArray(s.log)||s.log.length>90||s.log.some(l=>!Number.isInteger(l.turn)||typeof l.text!=='string'||l.text.length>400||!['info','good','danger','combat'].includes(l.kind)))throw Error('기록 데이터가 손상되었습니다.');
     if(s.result!==null&&(!s.result||typeof s.result.won!=='boolean'||typeof s.result.title!=='string'||s.result.title.length>100||typeof s.result.detail!=='string'||s.result.detail.length>400||!validNum(s.result.score,0,100000)))throw Error('결과 데이터가 손상되었습니다.');
     s.lastReport=null;this.state=s;this.rebuildRoads();this.refreshSupply();return true;

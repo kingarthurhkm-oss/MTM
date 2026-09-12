@@ -1,5 +1,6 @@
 import { GEOGRAPHY } from './geography.js';
 import { Game, TYPES, SITE_TYPES, clamp } from './engine.js';
+import { ARMY_DATA, ARMY_SCENARIO, armyFormation, armyChildren, armyTile } from './army.js';
 
 const $=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const game=new Game(),canvas=$('map'),ctx=canvas.getContext('2d'),mini=$('minimap'),mc=mini.getContext('2d');
@@ -7,7 +8,13 @@ let selected=null,selectedSite=null,selectedTile=null,target=null,mode='select',
 let reachable=new Map(),dirty=true,camera={x:0,y:0,zoom:1},width=0,height=0,toastTimer,first=true,processing=false;
 const images={};
 const symbolPath=(side,type)=>`symbols/${side}-${type}.svg`;
-for(const side of ['blue','red'])for(const type of Object.keys(TYPES)){const img=new Image();img.src=symbolPath(side,type);img.onload=()=>dirty=true;images[`${side}-${type}`]=img;}
+for(const side of ['blue','red'])for(const type of [...Object.keys(TYPES),'army-brigade','armor-brigade']){const img=new Image();img.src=symbolPath(side,type);img.onload=()=>dirty=true;images[`${side}-${type}`]=img;}
+const unitSymbol=u=>u.type+((game.formation(u)?.unit_level==='여단'&&['army','armor'].includes(u.type))?'-brigade':'');
+const armyRegionTiles=new Map();
+for(const region of Object.values(ARMY_DATA.regions)){
+ const id=game.board.id(region.hex.q,region.hex.r);
+ armyRegionTiles.set(id,[...(armyRegionTiles.get(id)||[]),region.name]);
+}
 const off=document.createElement('canvas');off.width=game.board.width+30;off.height=game.board.height+30;const oc=off.getContext('2d');
 const state=()=>game.state;
 function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),3500);}
@@ -16,6 +23,7 @@ function save(){toast(autosave()?'현재 진행을 저장했습니다.':'저장 
 function execute(result){if(result.ok){reachable=selected?game.reachable(game.unit(selected)):new Map();autosave();render();}toast(result.message);dirty=true;}
 function countryPath(context,poly){context.beginPath();for(const ring of poly){ring.forEach(([lon,lat],i)=>{const p=game.board.project(lon,lat);i?context.lineTo(p.x,p.y):context.moveTo(p.x,p.y);});context.closePath();}}
 function baseMap(){
+ $('map-caption').textContent=`${game.board.cols} × ${game.board.rows} HEX · ${game.board.tiles.length.toLocaleString('en-US')} TILES`;
  oc.fillStyle='#0e2633';oc.fillRect(0,0,off.width,off.height);
  oc.lineWidth=.7;oc.strokeStyle='#28404c';
  for(let lon=118;lon<148;lon+=2){const a=game.board.project(lon,24),b=game.board.project(lon,46);oc.beginPath();oc.moveTo(a.x,a.y);oc.lineTo(b.x,b.y);oc.stroke();}
@@ -62,13 +70,16 @@ function draw(){
   hitUnits=[];const stacks={};
   for(const u of game.alive().filter(u=>!u.embarked&&game.visible(u))){
    const t=game.board.tiles[u.tile];if(!on(t))continue;const p=screen(t.x,t.y),idx=stacks[u.tile]??0;stacks[u.tile]=idx+1;
-   const size=clamp(23+camera.zoom*3,23,38);p.x+=idx*14;p.y-=idx*9;const img=images[`${u.side}-${u.type}`];
+   const size=clamp(23+camera.zoom*3,23,38);p.x+=idx*14;p.y-=idx*9;const img=images[`${u.side}-${unitSymbol(u)}`];
    if(u.id===selected){ctx.fillStyle='#e9bd7044';ctx.strokeStyle='#efc375';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(p.x,p.y,size*.7,0,Math.PI*2);ctx.fill();ctx.stroke();}
    if(mode==='attack'&&selected&&game.canAttack(game.unit(selected),u)){ctx.strokeStyle='#efae8b';ctx.lineWidth=2;ctx.strokeRect(p.x-size*.65,p.y-size*.65,size*1.3,size*1.3);}
    if(img.complete&&img.naturalWidth){const ih=size,iw=ih*img.naturalWidth/img.naturalHeight;ctx.drawImage(img,p.x-iw/2,p.y-ih/2,iw,ih);}
    ctx.fillStyle='#071720';ctx.fillRect(p.x-12,p.y+size/2+3,24,3);ctx.fillStyle=u.supply<30?'#f0b55e':u.side==='blue'?'#81c4d6':'#d29195';ctx.fillRect(p.x-12,p.y+size/2+3,24*u.hp/100,3);
    if(camera.zoom>1.3||u.id===selected)textAt(u.name.split(' ')[0],p.x,p.y+size/2+16,u.side==='blue'?'#aed3df':'#d0a5aa',8);
    hitUnits.push({id:u.id,x:p.x,y:p.y,r:Math.max(size*.7,18)});
+  }
+  if(state().scenario===ARMY_SCENARIO&&camera.zoom>=2.5){
+   for(const [id,names] of armyRegionTiles){const t=game.board.tiles[id];if(!on(t))continue;const p=screen(t.x,t.y);textAt(names.join(' / '),p.x,p.y+47,'#e4c48a',9);}
   }
   const mw=mini.width,mh=mini.height;mc.fillStyle='#10232e';mc.fillRect(0,0,mw,mh);mc.drawImage(off,0,0,mw,mh);mc.strokeStyle='#dfb578';mc.lineWidth=1;mc.strokeRect(tl.x/game.board.width*mw,tl.y/game.board.height*mh,(br.x-tl.x)/game.board.width*mw,(br.y-tl.y)/game.board.height*mh);
  }
@@ -108,7 +119,12 @@ function actionButtons(u){
  return `<div class="actions-grid"><button data-mode="move" class="${mode==='move'?'active':''}"${disabled}>이동 명령</button><button data-action="fortify"${disabled}>방어 태세</button>${TYPES[u.type].attack?`<button class="wide ${mode==='attack'?'active':''}" data-mode="attack"${disabled}>공격 대상 선택</button>`:''}${u.type==='transport'?`<button data-action="load"${disabled}>승선</button><button data-mode="unload"${disabled}>하선</button>`:''}${['transport','supply'].includes(u.type)?`<button class="wide" data-action="deliver"${disabled}>보급 전달 · 적재 ${Math.round(u.cargo)}</button>`:''}<button data-action="center" class="wide subtle-btn">선택 부대 위치로 이동</button></div>`;
 }
 function policies(){return `<div class="section-label">NATIONAL COMMAND · 지휘점 ${state().cp}</div><div class="policies">${[['shelter','민간 보호',3],['diplomacy','위기 완화',3],['cyber','통신 방어',2],['supply','예비 보급',2]].map(([id,label,cost])=>`<button data-policy="${id}" ${state().cp<cost||state().policyUsed.includes(id)||state().result?'disabled':''}>${label}<span class="cost">${state().policyUsed.includes(id)?'이번 턴 실행 완료':`지휘점 ${cost}${id==='supply'?' · 물자 25':''}`}</span></button>`).join('')}</div><p class="policy-note">민간 보호는 다음 피해를 줄이고, 위기 완화는 핵 위협을 포함한 전략 위기 지수를 낮춥니다.</p>`;}
-function unitPanel(u){return `<div class="section-label">SELECTED FORMATION · ${u.side==='blue'?'FRIENDLY':'HOSTILE'}</div><div class="card"><div class="unit-header"><img src="${symbolPath(u.side,u.type)}" alt="${esc(TYPES[u.type].name)} 기호"><div><h3>${esc(u.name)}</h3><small>${{land:'지상',air:'공중',sea:'해상'}[TYPES[u.type].domain]} 전력 · ${u.entrenched?'방어 태세':'기동 태세'}</small></div></div><div class="stats-grid"><div><label>전력</label><strong>${Math.round(u.hp)}<span>%</span></strong></div><div><label>보급</label><strong class="${u.supply<40?'damage':''}">${Math.round(u.supply)}<span>%</span></strong></div><div><label>이동력</label><strong>${u.ap.toFixed(1)}</strong></div></div><p class="context">${u.side==='blue'?`보급 연결 ${Math.round(game.supplyQuality(u)*100)}% · ${u.acted?'공격·출격 완료':'공격·출격 가능'}`:'정찰로 식별된 가상 부대'}${u.supply<40?' · 보급 부족 페널티 적용':''}</p>${u.side==='blue'?actionButtons(u):''}</div>`;}
+function formationSummary(f){
+ if(!f)return '';
+ const parent=armyFormation(f.parent_unit),region=ARMY_DATA.regions[f.region_id];
+ return `<div class="formation-info"><p>${esc(f.unit_level)} · ${esc(f.unit_type)} · 상급 ${esc(parent?.unit_name||'—')}<br>시작 권역: ${esc(region.province)} ${esc(f.region)}${f.region_basis==='parent_region_game_fallback'?' (임시 게임 배정)':''}</p>${f.deployable?`<dl class="formation-stats">${[['mobility','기동'],['firepower','화력'],['armor','장갑'],['reconnaissance','정찰'],['logistics','군수']].map(([k,label])=>`<div><dt>${label}</dt><dd>${f[k]}</dd></div>`).join('')}</dl><p>0–100 게임 상대 점수 · 실제 전투력 아님</p>`:'<p>지휘부는 편제표 전용 · 전투 스탯 적용 없음</p>'}<p>대표 장비: ${f.major_equipment.length?esc(f.major_equipment.join(', ')):'부대별 확인 자료 미수록'}<br>${f.verification==='partial_official'?'일부 항목 공식 자료 교차확인':'2차 자료 기반 · 공식 추가 확인 필요'} · 열람 ${esc(f.source_date)}</p></div>`;
+}
+function unitPanel(u){return `<div class="section-label">SELECTED FORMATION · ${u.side==='blue'?'FRIENDLY':'HOSTILE'}</div><div class="card"><div class="unit-header"><img src="${symbolPath(u.side,unitSymbol(u))}" alt="${esc(TYPES[u.type].name)} 기호"><div><h3>${esc(u.name)}</h3><small>${{land:'지상',air:'공중',sea:'해상'}[TYPES[u.type].domain]} 전력 · ${u.entrenched?'방어 태세':'기동 태세'}</small></div></div><div class="stats-grid"><div><label>전력</label><strong>${Math.round(u.hp)}<span>%</span></strong></div><div><label>보급</label><strong class="${u.supply<40?'damage':''}">${Math.round(u.supply)}<span>%</span></strong></div><div><label>이동력</label><strong>${u.ap.toFixed(1)}</strong></div></div><p class="context">${u.side==='blue'?`보급 연결 ${Math.round(game.supplyQuality(u)*100)}% · ${u.acted?'공격·출격 완료':'공격·출격 가능'}`:'정찰로 식별된 가상 부대'}${u.supply<40?' · 보급 부족 페널티 적용':''}</p>${u.side==='blue'?actionButtons(u):''}${formationSummary(game.formation(u))}${u.formationId?`<button class="formation-link" data-formation="${u.formationId}">편제·출처 자세히</button>`:''}${game.at(u.tile).filter(v=>v.side==='blue').length>1?`<button class="formation-link" data-stack="${u.tile}">같은 헥스 부대 선택 (${game.at(u.tile).filter(v=>v.side==='blue').length})</button>`:''}</div>`;}
 function renderCommand(){
  let html='';const u=selected?game.unit(selected):null,v=target?game.unit(target):null;
  if(u&&u.hp>0){html+=unitPanel(u);if(mode!=='select')html+=`<p class="action-hint">${{move:'빛나는 헥스를 누르면 이동합니다. 먼 목적지는 이번 턴 이동력만큼 진행합니다.',attack:'테두리가 표시된 적 부대를 눌러 전투 조건을 확인하세요.',unload:'수송선단에 인접한 아군 해안을 누르세요.'}[mode]} <button data-mode="select" class="subtle-btn">명령 취소</button></p>`;
@@ -134,7 +150,8 @@ function render(){
  if(tab==='command')html=renderCommand();
  if(tab==='forces'){
   html=`<div class="section-label">FRIENDLY FORCES · ${game.alive('blue').length}개 부대</div><div class="roster-filter">${[['all','전체'],['land','지상'],['air','공중'],['sea','해상']].map(([id,n])=>`<button data-filter="${id}" class="${filter===id?'active':''}">${n}</button>`).join('')}</div>`;
-  html+=game.alive('blue').filter(u=>filter==='all'||TYPES[u.type].domain===filter).map(u=>`<button class="unit-row" data-unit="${u.id}"><img src="${symbolPath(u.side,u.type)}" alt=""><div><b>${esc(u.name)}</b><small>보급 ${Math.round(u.supply)}% · 이동 ${u.ap.toFixed(1)}${u.embarked?' · 승선 중':''}</small></div><span class="health">${Math.round(u.hp)}</span></button>`).join('');
+  html+='<button class="formation-link" data-modal="army-catalog">공개 육군 편제표 · 67개 항목</button>';
+  html+=game.alive('blue').filter(u=>filter==='all'||TYPES[u.type].domain===filter).map(u=>`<button class="unit-row" data-unit="${u.id}"><img src="${symbolPath(u.side,unitSymbol(u))}" alt=""><div><b>${esc(u.name)}</b><small>${game.formation(u)?esc(game.formation(u).region)+' 시작 권역 · ':'가상 전력 · '}보급 ${Math.round(u.supply)}% · 이동 ${u.ap.toFixed(1)}${u.embarked?' · 승선 중':''}</small></div><span class="health">${Math.round(u.hp)}</span></button>`).join('');
  }
  if(tab==='infra'){
   html='<div class="section-label">시설 가동 · 아군 통제 구역</div><p class="policy-note" style="margin:0 0 14px">시설을 선택해 가동 상태와 복구 명령을 확인하세요. 모든 시설은 가상 배치입니다.</p>';
@@ -150,9 +167,19 @@ function render(){
 }
 function modal(html){$('modal-content').innerHTML=html;if(!$('modal').open)$('modal').showModal();}
 function closeModal(){$('modal').close();}
-function briefing(){modal(`<p class="modal-eyebrow">PENINSULA / SCENARIO 01</p><h2>한반도, 2026.</h2><div class="briefing-stats"><div><strong>28,800</strong><span>헥스 타일</span></div><div><strong>3</strong><span>작전 영역</span></div><div><strong>45</strong><span>최대 턴</span></div></div><div class="modal-copy"><p>대한민국 진영에서 육·해·공 전력을 지휘하세요. 세 구역을 2턴 동안 확보하면서 민간 보호와 기반시설을 보존하는 것이 목표입니다.</p><p><b>부대 선택 → 이동·공격 → 국가 지휘 명령 → 턴 종료.</b> 지도는 한 손가락으로 이동하고 두 손가락으로 확대할 수 있습니다.</p><p>2026년을 배경으로 한 가상 전략 게임입니다. 부대 편제·시설 배치·성능·지형 효과·피해 수치는 게임용이며, 실제 전쟁 예측값이 아닙니다. 턴은 실제 시간과 대응하지 않습니다.</p></div><div class="modal-grid"><button data-modal="help">조작법과 규칙</button><button class="primary" data-modal="start">작전 시작 →</button></div>`);}
-function menu(){modal(`<p class="modal-eyebrow">COMMAND MENU</p><h2>작전 관리</h2><div class="modal-grid"><button data-modal="save">진행 저장</button><button data-modal="restore">자동 저장 불러오기</button><button data-modal="export">저장 파일 내보내기</button><button data-modal="import">저장 파일 가져오기</button><button data-modal="help">조작법 · 규칙 · 범례</button><button data-modal="new" class="danger">새 시나리오</button><button class="primary wide" data-modal="close">계속하기</button></div><p class="policy-note">명령 실행 후 자동 저장됩니다. 기기 사이에 옮길 때는 JSON 저장 파일을 사용하세요.</p>`);}
-function help(){modal(`<p class="modal-eyebrow">FIELD MANUAL</p><h2>지휘관 안내</h2><div class="modal-copy"><ol><li>지도 또는 <b>부대</b> 탭에서 아군을 선택합니다.</li><li><b>이동 명령</b> 후 헥스를 터치합니다. 먼 목적지는 이동력이 허용하는 구간까지 이동합니다.</li><li><b>공격 대상 선택</b> 후 적 부대를 터치하고, 전투비를 확인한 뒤 <b>전투 실행</b>을 누릅니다.</li><li>비행단은 방어·정찰·지원 또는 전투 출격 중 하나를 수행합니다. 방공여단은 주변 시설과 전력을 자동 방어합니다.</li><li>지상부대를 가동률 25% 이상인 아군 항만에 두고 인접 수송선단으로 승선시킵니다. 하선은 인접한 아군 해안에서 가능합니다.</li><li>보급 탭의 청록색은 원활, 황색은 감소, 적색은 단절입니다. 보급대·수송선단은 3헥스 이내 부대에 물자를 전달합니다.</li><li>시설 복구에는 지휘점 2와 자재 12가 필요합니다. 통신은 지휘점, 전력·철도·연료는 보급, 도로는 이동, 공항은 출격 효율에 영향을 줍니다.</li><li>세 목표를 2턴 유지하면 종료됩니다. 민간 보호 70%와 시설 60% 이상이면 보존 목표도 달성합니다. 보호 40% 미만, 시설 30% 미만, 지상전력 상실 또는 45턴 초과 시 실패합니다.</li></ol><p>점수는 보호·시설·전력 보존과 짧은 소요 턴을 합산합니다. 핵 위협은 위기 85 이상에서 발생하는 추상적 재난 이벤트이며, 실제 무기 효과를 계산하지 않습니다.</p><p>적 부대는 정찰 범위에 들어와야 표시됩니다. 외국 영토와 영공은 플레이할 수 없습니다. 모든 시설 위치와 전력 수치는 가상입니다.</p></div><div class="legend-symbols">${['army','armor','air','navy','airdefense','transport'].map(t=>`<div><img src="${symbolPath('blue',t)}" alt="${TYPES[t].name}"><span>${TYPES[t].name}</span></div>`).join('')}</div><p class="policy-note">APP-6 기호: 사단 XX · 여단 X. 비행단·전단은 공중·수상 기호와 부대명으로 집계 단위를 표시합니다. 전체 APP-6 표준을 구현한 군용 체계는 아닙니다.<br>해안선: Natural Earth / world-atlas 2.0.2 · 기호: milsymbol 3.0.3 (MIT). 작은 섬은 타일 해상도에 맞춰 확대 표시됩니다.</p><button data-modal="close" class="primary" style="width:100%;margin-top:18px">확인</button>`);}
+function armyCatalog(){
+ const node=f=>{const children=armyChildren(f.id),row=`<button class="formation-link" data-formation="${f.id}">${esc(f.unit_name)} · ${esc(f.region)}</button>`;return children.length?`<details class="formation-tree" ${['본부','사령부'].includes(f.unit_level)?'open':''}><summary>${esc(f.unit_name)} · ${children.length}개 하위 항목</summary>${row}${children.map(node).join('')}</details>`:row;};
+ modal(`<p class="modal-eyebrow">PUBLIC ARMY CATALOG</p><h2>육군 편제표</h2><p class="modal-copy">지휘부 12 · 사단 33 · 독립 전투여단 22<br>시군 대표 게임 권역 · 열람 ${ARMY_DATA.checked_at}<br>공개 행정 편제의 단순화이며 현행 작전지휘 체계가 아닙니다. 공식 자료로 확인되지 않은 항목을 포함합니다.</p><button class="formation-link" data-modal="close">지도로 돌아가기</button>${ARMY_DATA.units.filter(f=>!f.parent_unit).map(node).join('')}<details class="formation-tree"><summary>아직 수록하지 않은 범위</summary><ul>${ARMY_DATA.pending_scope.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></details>`);
+}
+function formationDetail(id){
+ const f=armyFormation(id);if(!f)return;
+ const labels={unit_name:'명칭',region:'시군 연관성',parent_unit:'상급 편제',unit_type:'유형',major_equipment:'대표 장비',historical_formation:'창설 이력'};
+ modal(`<p class="modal-eyebrow">PUBLIC FORMATION</p><h2>${esc(f.unit_name)}</h2>${formationSummary(f)}<p class="modal-copy">${esc(f.notes)}</p><div class="modal-copy"><b>항목별 출처</b><ul>${f.source.map(ref=>{const s=ARMY_DATA.sources[ref.source_id];return `<li><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)}</a><br>${ref.fields.map(k=>esc(labels[k]||k)).join(' · ')}<br>${s.kind==='official'?'공식':s.kind==='news'?'공개 언론':s.kind==='secondary_mirror'?'나무위키 미러 · 원문 직접 미확인':'공개 위키'} · ${s.published_date?'발행 '+esc(s.published_date)+' · ':''}열람 ${esc(s.checked_at)}</li>`;}).join('')}</ul></div><div class="modal-grid"><button data-modal="army-catalog">편제표</button><button class="primary" data-jump-formation="${f.id}">${state().units.some(u=>u.formationId===f.id&&u.hp>0)?'게임 부대 선택':'대표 권역 보기'}</button><button class="wide" data-modal="close">닫기</button></div>`);
+}
+function startScenario(scenario){game.newGame(2026,scenario);selected=null;selectedSite=null;selectedTile=null;target=null;mode='select';tab='command';filter='all';reachable=new Map();baseMap();autosave();render();fit();closeModal();clearTimeout(toastTimer);$('toast').classList.remove('visible');}
+function briefing(){modal(`<p class="modal-eyebrow">PENINSULA / SCENARIO 01</p><h2>한반도, 2026.</h2><div class="briefing-stats"><div><strong>${game.board.tiles.length.toLocaleString('en-US')}</strong><span>헥스 타일</span></div><div><strong>3</strong><span>작전 영역</span></div><div><strong>45</strong><span>최대 턴</span></div></div><div class="modal-copy"><p>대한민국 진영에서 육·해·공 전력을 지휘하세요. 세 구역을 2턴 동안 확보하면서 민간 보호와 기반시설을 보존하는 것이 목표입니다.</p><p><b>부대 선택 → 이동·공격 → 국가 지휘 명령 → 턴 종료.</b> 지도는 한 손가락으로 이동하고 두 손가락으로 확대할 수 있습니다.</p><p>2026년을 배경으로 한 가상 전략 게임입니다. 기본값은 공개 육군 부대명과 시군 대표 권역을 사용하는 편제입니다. 지원전력·적군·시설·성능·피해 수치는 가상이며 실제 전쟁 예측값이 아닙니다. 턴은 실제 시간과 대응하지 않습니다.</p></div><div class="modal-grid"><button data-modal="help">조작법과 규칙</button><button class="primary wide" data-modal="start">공개 육군 편제로 시작 · 55개 부대 →</button><button data-modal="legacy-start">기존 가상 편제로 시작</button><button data-modal="army-catalog">육군 편제·출처 먼저 보기</button></div>`);}
+function menu(){modal(`<p class="modal-eyebrow">COMMAND MENU</p><h2>작전 관리</h2><div class="modal-grid"><button data-modal="save">진행 저장</button><button data-modal="restore">자동 저장 불러오기</button><button data-modal="export">저장 파일 내보내기</button><button data-modal="import">저장 파일 가져오기</button><button data-modal="help">조작법 · 규칙 · 범례</button><button data-modal="army-catalog">육군 편제·출처</button><button data-modal="new" class="danger">새 시나리오</button><button class="primary wide" data-modal="close">계속하기</button></div><p class="policy-note">명령 실행 후 자동 저장됩니다. 기기 사이에 옮길 때는 JSON 저장 파일을 사용하세요.</p>`);}
+function help(){modal(`<p class="modal-eyebrow">FIELD MANUAL</p><h2>지휘관 안내</h2><div class="modal-copy"><ol><li>지도 또는 <b>부대</b> 탭에서 아군을 선택합니다.</li><li><b>이동 명령</b> 후 헥스를 터치합니다. 먼 목적지는 이동력이 허용하는 구간까지 이동합니다.</li><li><b>공격 대상 선택</b> 후 적 부대를 터치하고, 전투비를 확인한 뒤 <b>전투 실행</b>을 누릅니다.</li><li>비행단은 방어·정찰·지원 또는 전투 출격 중 하나를 수행합니다. 방공여단은 주변 시설과 전력을 자동 방어합니다.</li><li>지상부대를 가동률 25% 이상인 아군 항만에 두고 인접 수송선단으로 승선시킵니다. 하선은 인접한 아군 해안에서 가능합니다.</li><li>보급 탭의 청록색은 원활, 황색은 감소, 적색은 단절입니다. 보급대·수송선단은 3헥스 이내 부대에 물자를 전달합니다.</li><li>시설 복구에는 지휘점 2와 자재 12가 필요합니다. 통신은 지휘점, 전력·철도·연료는 보급, 도로는 이동, 공항은 출격 효율에 영향을 줍니다.</li><li>세 목표를 2턴 유지하면 종료됩니다. 민간 보호 70%와 시설 60% 이상이면 보존 목표도 달성합니다. 보호 40% 미만, 시설 30% 미만, 지상전력 상실 또는 45턴 초과 시 실패합니다.</li></ol><p>점수는 보호·시설·전력 보존과 짧은 소요 턴을 합산합니다. 핵 위협은 위기 85 이상에서 발생하는 추상적 재난 이벤트이며, 실제 무기 효과를 계산하지 않습니다.</p><p>적 부대는 정찰 범위에 들어와야 표시됩니다. 외국 영토와 영공은 플레이할 수 없습니다. 모든 시설 위치와 전력 수치는 가상입니다.</p></div><div class="legend-symbols">${['army','armor','artillery','air','navy','airdefense','transport'].map(t=>`<div><img src="${symbolPath('blue',t)}" alt="${TYPES[t].name}"><span>${TYPES[t].name}</span></div>`).join('')}</div><p class="policy-note">APP-6 기호: 사단 XX · 여단 X. 비행단·전단은 공중·수상 기호와 부대명으로 집계 단위를 표시합니다. 전체 APP-6 표준을 구현한 군용 체계는 아닙니다.<br>해안선: Natural Earth / world-atlas 2.0.2 · 기호: milsymbol 3.0.3 (MIT). 작은 섬은 타일 해상도에 맞춰 확대 표시됩니다.</p><button data-modal="close" class="primary" style="width:100%;margin-top:18px">확인</button>`);}
 function resultModal(){const r=state().result;if(r)modal(`<p class="modal-eyebrow">SCENARIO COMPLETE</p><h2>${esc(r.title)}</h2><p class="modal-copy">${esc(r.detail)}</p><div class="briefing-stats"><div><strong>${r.score.toLocaleString()}</strong><span>종합 점수</span></div><div><strong>${state().turn}</strong><span>소요 턴</span></div><div><strong>${Math.round(state().civilians)}%</strong><span>민간 보호</span></div></div><div class="modal-grid"><button data-modal="close">최종 지도 보기</button><button data-modal="new" class="primary">새 시나리오</button></div>`);}
 async function endTurn(){if(processing||state().result)return;processing=true;render();$('end-turn').textContent='턴 처리 중…';await new Promise(r=>setTimeout(r,35));try{const r=game.endTurn();target=null;selected=selected&&game.unit(selected).hp>0?selected:null;mode='select';tab='log';autosave();toast(r.message);}catch(e){toast('턴 처리 중 오류가 발생했습니다. 저장 파일을 보존하세요.');console.error(e);}finally{processing=false;$('end-turn').innerHTML='턴 종료 <span>→</span>';render();resultModal();}}
 function importSave(text){try{game.import(text);selected=null;selectedSite=null;target=null;mode='select';baseMap();render();fit();autosave();closeModal();toast('저장한 시나리오를 불러왔습니다.');resultModal();}catch(e){toast(e.message);}}
@@ -161,7 +188,10 @@ document.addEventListener('click',e=>{
  const b=e.target.closest('button');if(!b||b.disabled)return;const d=b.dataset;
  if(d.tab){tab=d.tab;render();$('panel-content').scrollTop=0;}
  if(d.layer){layer=d.layer;render();}
- if(d.unit){choose(d.unit,true);$('panel-content').scrollTop=0;}
+ if(d.unit){choose(d.unit,true);$('panel-content').scrollTop=0;if($('modal').open)closeModal();}
+ if(d.formation)formationDetail(d.formation);
+ if(d.jumpFormation){const f=armyFormation(d.jumpFormation),u=state().units.find(u=>u.formationId===f?.id&&u.hp>0);if(u)choose(u.id,true);else if(f){selected=null;selectedSite=null;target=null;mode='select';selectedTile=armyTile(game.board,f);centerTile(selectedTile);render();}closeModal();}
+ if(d.stack)modal(`<h2>같은 헥스의 부대</h2><p class="modal-copy">같은 대표 권역에 배치되거나 게임 중 함께 이동한 부대입니다.</p>${game.at(Number(d.stack)).filter(u=>u.side==='blue').map(u=>`<button class="formation-link" data-unit="${u.id}">${esc(u.name)}</button>`).join('')}<button data-modal="close">닫기</button>`);
  if(d.filter){filter=d.filter;render();}
  if(d.site){selectedSite=d.site;selected=null;target=null;tab='command';selectedTile=state().sites.find(s=>s.id===d.site).tile;centerTile(selectedTile);render();}
  if(d.objective){const obj=state().objectives.find(o=>o.id===d.objective);centerTile(obj.tile);}
@@ -181,12 +211,16 @@ document.addEventListener('click',e=>{
  if(d.modal){
   if(['close','start'].includes(d.modal)){closeModal();if(d.modal==='start')autosave();}
   if(d.modal==='help')help();
+  if(d.modal==='army-catalog')armyCatalog();
+  if(d.modal==='reset-army')startScenario(ARMY_SCENARIO);
+  if(d.modal==='legacy-start')startScenario('legacy');
   if(d.modal==='save'){save();closeModal();}
   if(d.modal==='restore'){try{const text=localStorage.getItem('peninsula-autosave-v1');if(text)importSave(text);else toast('저장된 진행이 없습니다.');}catch{toast('저장 공간에 접근하지 못했습니다.');}}
   if(d.modal==='export')exportSave();
   if(d.modal==='import'){if(window.AndroidFiles)window.AndroidFiles.importSave();else $('import-input').click();}
-  if(d.modal==='new')modal('<p class="modal-eyebrow">NEW SCENARIO</p><h2>새로 시작할까요?</h2><p class="modal-copy">현재 자동 저장은 새 시나리오로 교체됩니다. 보관하려면 먼저 파일로 내보내세요.</p><div class="modal-grid"><button data-modal="close">취소</button><button data-modal="reset" class="danger">새로 시작</button></div>');
-  if(d.modal==='reset'){game.newGame();selected=null;selectedSite=null;selectedTile=null;target=null;mode='select';tab='command';baseMap();autosave();render();fit();closeModal();}
+  if(d.modal==='new')modal('<p class="modal-eyebrow">NEW SCENARIO</p><h2>새로 시작할까요?</h2><p class="modal-copy">현재 자동 저장은 새 시나리오로 교체됩니다. 보관하려면 먼저 파일로 내보내세요.</p><div class="modal-grid"><button data-modal="close">취소</button><button data-modal="reset" class="primary wide">공개 육군 편제로 새로 시작 · 55개 부대</button><button data-modal="reset-legacy">기존 가상 편제로 시작</button></div>');
+  if(d.modal==='reset')startScenario(ARMY_SCENARIO);
+  if(d.modal==='reset-legacy')startScenario('legacy');
  }
 });
 $('zoom-in').onclick=()=>zoom(1.3);$('zoom-out').onclick=()=>zoom(1/1.3);$('center-button').onclick=()=>fit();$('theater-button').onclick=()=>fit(true);$('save-button').onclick=save;$('end-turn').onclick=endTurn;$('menu-button').onclick=menu;

@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Game, Board, TYPES} from '../app/src/main/assets/game/engine.js';
 
-test('28,800 cells have symmetric six-way adjacency and cover both bounding islands',()=>{
- const b=new Board();assert.equal(b.cols,120);assert.equal(b.rows,240);assert.equal(b.tiles.length,28800);
+test('115,200 cells have symmetric six-way adjacency and cover both bounding islands',()=>{
+ const b=new Board();assert.equal(b.cols,240);assert.equal(b.rows,480);assert.equal(b.tiles.length,115200);
  for(const t of b.tiles){assert.ok(b.links[t.id].length<=6);for(const n of b.links[t.id]){assert.ok(b.links[n].includes(t.id));assert.equal(b.distance(t.id,n),1);}}
  for(const [lon,lat] of [[127.7,26.3],[142.5,43.3]]){const p=b.project(lon,lat);assert.ok(p.x>0&&p.x<b.width&&p.y>0&&p.y<b.height);}
  assert.equal(b.nearest(128,35.5).home,1);assert.equal(b.nearest(126,39).home,2);assert.equal(b.nearest(142.5,43.3).home,3);
