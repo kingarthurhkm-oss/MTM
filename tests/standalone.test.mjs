@@ -6,7 +6,7 @@ import vm from 'node:vm';
 
 const root=new URL('../',import.meta.url);
 test('distributed HTML runs the 240x480 default Army game and retires stale downloads',()=>{
- execFileSync('python3',['tools/build-standalone.py'],{cwd:root});
+ execFileSync(process.env.PYTHON||'python3',['tools/build-standalone.py'],{cwd:root});
  const release=JSON.parse(readFileSync(new URL('package.json',root))).htmlRelease;
  const filename=`peninsula-2026-${release}.html`;
  const html=readFileSync(new URL(`downloads/${filename}`,root),'utf8');

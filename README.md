@@ -1,6 +1,6 @@
 # PENINSULA 2026
 
-[Android APK 다운로드](https://github.com/kingarthurhkm-oss/MTM/raw/refs/heads/main/downloads/peninsula-2026-debug.apk) · [소스 ZIP](https://github.com/kingarthurhkm-oss/MTM/archive/refs/heads/main.zip) · [오프라인 HTML](downloads/peninsula-2026-v2.html)
+[Android APK 다운로드](https://github.com/kingarthurhkm-oss/MTM/raw/refs/heads/main/downloads/peninsula-2026-debug.apk) · [소스 ZIP](https://github.com/kingarthurhkm-oss/MTM/archive/refs/heads/main.zip) · [오프라인 HTML](downloads/peninsula-2026-v3.html)
 
 ![Android 화면](docs/android-preview.png)
 
@@ -8,7 +8,7 @@
 
 2026년은 시나리오 배경입니다. 기본 시나리오는 **공개 육군 편제**로, 공개 부대명과 시군 대표 게임 권역을 사용합니다. 기존 가상 편제는 새 시나리오 메뉴의 호환 선택지로 유지합니다. 전투력·시설·지원전력·적군·작전·피해 수치는 가상이며 실제 전쟁 예측값이 아닙니다.
 
-**육군 데이터 확장:** 지휘부 12개, 사단 33개, 독립 전투여단 22개를 편제표로 제공하며 새 게임에서 55개 부대를 기본으로 조작할 수 있습니다. [데이터 구조·편제·출처·미수록 범위](docs/ARMY-DATA.md), [스탯 산정 규칙](docs/ARMY-STATS.md), [추가 검증 기록](docs/ARMY-VALIDATION.md)을 참고하세요. [육군 확장 오프라인 HTML](downloads/peninsula-2026-v2.html)은 v2(240×480, 115,200타일)입니다. 구형 120×240 HTML은 삭제했습니다. 기존 APK는 이전 빌드입니다.
+**육군 데이터 확장:** 지휘부 12개, 사단 33개, 독립 전투여단 22개를 편제표로 제공하며 새 게임에서 55개 부대를 기본으로 조작할 수 있습니다. [데이터 구조·편제·출처·미수록 범위](docs/ARMY-DATA.md), [스탯 산정 규칙](docs/ARMY-STATS.md), [추가 검증 기록](docs/ARMY-VALIDATION.md)을 참고하세요. [육군 확장 오프라인 HTML](downloads/peninsula-2026-v3.html)은 v3(240×480, 115,200타일)입니다. 구형 120×240 HTML은 삭제했습니다. 기존 APK는 이전 빌드입니다.
 
 ## 구현 범위
 
@@ -42,7 +42,7 @@ Android 8.0(API 26) 이상에서 설치하는 앱입니다. Android System WebVi
 
 디버그 서명 APK는 직접 설치·테스트용입니다. Google Play 게시용으로는 소유자의 서명 키를 사용해 별도 릴리스를 빌드해야 합니다. 새 디버그 키로 빌드한 APK가 기존 설치에 업데이트되지 않을 때는 먼저 게임 저장 JSON을 내보내고 기존 앱을 삭제한 뒤 설치하세요.
 
-소스의 `dist/peninsula-2026-v2.html`은 단일 파일 오프라인 동반 버전입니다. 데스크톱 브라우저에서 직접 열어 플레이할 수 있습니다. 브라우저와 APK의 저장 공간은 별개이며 JSON으로 진행을 옮길 수 있습니다.
+소스의 `dist/peninsula-2026-v3.html`은 단일 파일 오프라인 동반 버전입니다. 데스크톱 브라우저에서 직접 열어 플레이할 수 있습니다. 브라우저와 APK의 저장 공간은 별개이며 JSON으로 진행을 옮길 수 있습니다.
 
 ## 조작
 
@@ -108,4 +108,8 @@ docs/                     설계, 출처, 검증 기록
 
 ### HTML 배포 버전
 
-현재 실행 파일은 `peninsula-2026-v2.html`입니다. 다음 배포는 `package.json`의 `htmlRelease`와 화면 제목을 v3, v4 순서로 올립니다. `npm run standalone`은 dist와 downloads에 같은 파일을 생성하고 구형 무버전 HTML을 제거합니다. `npm test`는 생성된 HTML 안의 실제 게임 보드와 기본 육군 편제를 검사합니다.
+현재 실행 파일은 `peninsula-2026-v3.html`입니다. 다음 배포는 `package.json`의 `htmlRelease`와 화면 제목을 v4, v5 순서로 올립니다. `npm run standalone`은 dist와 downloads에 같은 파일을 생성하고 구형 무버전 HTML을 제거합니다. `npm test`는 생성된 HTML 안의 실제 게임 보드와 기본 육군 편제를 검사합니다.
+
+## 전투지경선 (v3)
+
+사단 선택 → **전투지경선 지정 / 해제**로 여러 아군 타일을 책임 전선으로 지정할 수 있습니다. 사단 기호는 HQ, 전투력은 타일별 배치와 예비로 분리됩니다. **±**로 배분하고 **HQ·지경선 전체 보기**로 확인하세요. 기존 저장과 미지정 사단은 기존 방식으로 동작합니다. [구조·전투 규칙·검증·후속 범위](docs/COMBAT-SECTORS.md)를 참고하세요.

@@ -1,6 +1,8 @@
 import { GEOGRAPHY } from './geography.js';
 import { ARMY_DATA, ARMY_SCENARIO, armyFormation, armyTile, armyUnitSpec } from './army.js';
 
+import { sectorStrength, sectorOwner, validateSector, applySectorLoss } from './sectors.js';
+
 export const VERSION = 2;
 export const TYPES = {
   army: {name:'보병사단', domain:'land', mp:9, attack:17, defense:16, range:1},
@@ -76,6 +78,20 @@ export class Game {
   unit(id){return this.state.units.find(u=>u.id===id);}
   formation(unit){return unit?.formationId?armyFormation(unit.formationId):null;}
   spec(unit){return armyUnitSpec(TYPES[unit.type],this.formation(unit));}
+  isDivision(u){return u&&['army','armor'].includes(u.type)&&(!this.formation(u)||this.formation(u).unit_level==='사단');}
+  // tile is the HQ position; hp is the total command strength, not HQ strength.
+  commandStatus(u){return {hqTile:u.tile,sector:u.sector??null,parentCommandId:this.formation(u)?.parent_unit??null,canReallocate:!!this.active(u),...sectorStrength(u,null,0)};}
+  responsible(tile,side){return sectorOwner(this.state.units,tile,side);}
+  setSector(id,allocations,reserveShare){
+    const u=this.unit(id);if(!this.active(u)||!this.isDivision(u))return {ok:false,message:'활성 사단을 선택하세요.'};
+    const sector={version:1,commandId:u.id,commandLevel:'division',allocations,reserveShare,engaged:0};
+    try{validateSector(sector,this.board);}catch(e){return {ok:false,message:e.message};}
+    if(allocations.some(a=>!this.owned(a.tile,u.side)||this.at(a.tile).some(v=>v.side!==u.side)||this.alive(u.side).some(v=>v.id!==id&&v.sector?.allocations.some(b=>b.tile===a.tile))))return {ok:false,message:'아군 육지에만 지정할 수 있으며 다른 사단과 중복할 수 없습니다.'};
+    u.sector={...sector,allocations:allocations.map(a=>({...a}))};return {ok:true,message:'전투지경선과 예비 전력을 배분했습니다.'};
+  }
+  defenseAt(u,tile){return this.responsible(tile,u.side==='blue'?'red':'blue')??this.at(tile).find(v=>v.side!==u.side)??null;}
+  canAttackTile(u,tile){const v=u&&this.defenseAt(u,tile);return !!v&&this.canAttack(u,v,tile);}
+  attackTile(id,tile,ai=false){const u=this.unit(id);if(!u)return {ok:false,message:'부대가 없습니다.'};const v=this.defenseAt(u,tile);return v?this.attack(id,v.id,ai,tile):{ok:false,message:'담당 방어 부대가 없습니다.'};}
   reconRadius(unit){const f=this.formation(unit);return f?4+Math.floor(f.reconnaissance/25):unit.type==='air'?12:unit.type==='navy'?7:6;}
   alive(side){return this.state.units.filter(u=>u.hp>0&&(!side||u.side===side));}
   at(id){return this.alive().filter(u=>u.tile===id&&!u.embarked);}
@@ -188,7 +204,7 @@ export class Game {
     const domain=TYPES[unit.type].domain;
     if(domain==='air')return false;
     if((domain==='sea')!==t.sea)return false;
-    if(this.at(id).some(u=>u.side!==unit.side))return false;
+    if(this.at(id).some(u=>u.side!==unit.side)||this.responsible(id,unit.side==='blue'?'red':'blue'))return false;
     if(['supply','airdefense'].includes(unit.type)&&!this.owned(id,unit.side))return false;
     return true;
   }
@@ -202,9 +218,9 @@ export class Game {
     }}return dist;
   }
   capture(unit,tile){
-    if(!['army','armor'].includes(unit.type))return;
+    if(!['army','armor'].includes(unit.type)||unit.sector)return;
     for(const id of this.board.within(tile,1)){
-      const t=this.board.tiles[id];if(t.sea||t.foreign||this.at(id).some(u=>u.side!==unit.side))continue;
+      const t=this.board.tiles[id];if(t.sea||t.foreign||this.at(id).some(u=>u.side!==unit.side)||this.responsible(id,unit.side==='blue'?'red':'blue'))continue;
       this.state.control[id]=SIDE[unit.side];
     }
   }
@@ -258,52 +274,64 @@ export class Game {
     return Math.max(0,1-d/40);
   }
   supplyPath(u){const parent=this.supplyCache[u.side]?.parent;if(!parent)return[];const out=[u.tile];let i=u.tile;for(let k=0;k<100&&parent[i]>=0;k++){i=parent[i];out.push(i);}return out;}
-  visible(u){if(u.side==='blue')return true;return this.state.recon>0||this.alive('blue').some(a=>this.board.distance(a.tile,u.tile)<=this.reconRadius(a));}
-  canAttack(u,v){
+  visible(u){if(u.side==='blue')return true;return this.state.recon>0||this.alive('blue').some(a=>this.board.distance(a.tile,u.tile)<=this.reconRadius(a)||(!a.embarked&&a.sector?.allocations.some(b=>b.share>0&&b.tile===u.tile)));}
+  canAttack(u,v,tile=v?.tile){
+    if(!Number.isInteger(tile)||!this.board.tiles[tile])return false;
     if(!u||!v||u.hp<=0||v.hp<=0||u.side===v.side||u.acted||u.embarked||v.embarked)return false;
     const spec=this.spec(u);if(!spec.attack||u.ap<(u.type==='air'?1:3))return false;
-    if(u.side==='blue'&&!this.visible(v))return false;
+    if(u.side==='blue'&&!this.visible({...v,tile}))return false;
+    if(u.sector&&!u.sector.allocations.some(a=>a.tile===tile&&a.share>0))return false;
     if(u.type==='air'&&this.supplyQuality(u)<.25)return false;
     const ud=spec.domain,vd=TYPES[v.type].domain;
     if(ud==='land'&&vd!=='land')return false;
-    if(ud==='sea'&&vd==='land'&&!this.board.links[v.tile].some(k=>this.board.tiles[k].sea))return false;
+    if(ud==='sea'&&vd==='land'&&!this.board.links[tile].some(k=>this.board.tiles[k].sea))return false;
     if(ud==='sea'&&vd==='air')return false;
-    return this.board.distance(u.tile,v.tile)<=spec.range;
+    return u.sector?true:this.board.distance(u.tile,tile)<=spec.range;
   }
-  combatPreview(u,v){
+  combatPreview(u,v,tile=v.tile){
+    v=this.responsible(tile,v.side)??v;
+    const attackPower=sectorStrength(u,tile),defensePower=sectorStrength(v,tile);
     const posture=u.side==='blue'?this.state.posture:'balanced';
     const factors={careful:.82,balanced:1,push:1.2};
     const cover=this.alive(u.side).some(a=>a.type==='air'&&a.mission==='support')?1.2:1;
-    const a=this.spec(u).attack*(u.hp/100)*(.35+.65*u.supply/100)*factors[posture]*cover;
-    const terrain=this.board.tiles[v.tile].terrain==='mountain'?1.28:1;
-    const d=this.spec(v).defense*(.3+.7*v.hp/100)*(.45+.55*v.supply/100)*terrain*(v.entrenched?1.3:1);
+    const a=this.spec(u).attack*(attackPower.committed/100)*(.35+.65*u.supply/100)*factors[posture]*cover;
+    const terrain=this.board.tiles[tile].terrain==='mountain'?1.28:1;
+    const d=this.spec(v).defense*(v.sector?defensePower.committed/100:(.3+.7*v.hp/100))*(.45+.55*v.supply/100)*terrain*(v.entrenched?1.3:1);
     const ratio=a/Math.max(1,d);
     return {ratio,band:ratio<.67?'불리':ratio<1.25?'접전':ratio<2?'우세':'크게 우세',posture};
   }
-  attack(id,target,ai=false){
-    const u=this.unit(id),v=this.unit(target);
+  attack(id,target,ai=false,tile=null){
+    const u=this.unit(id);let v=this.unit(target);
+    if(!u||!v||u.side===v.side)return {ok:false,message:'공격 대상이 없습니다.'};
+    tile=tile??v.tile;v=this.responsible(tile,v.side)??v;
+    if(tile!==v.tile&&!v.sector?.allocations.some(a=>a.tile===tile))return {ok:false,message:'담당 지경선이 아닙니다.'};
     if(!ai&&!this.active(u))return {ok:false,message:'공격할 수 없는 부대입니다.'};
-    if(!this.canAttack(u,v))return {ok:false,message:'사거리 · 행동력 · 출격 상태를 확인하세요.'};
-    const {ratio,posture}=this.combatPreview(u,v);
+    if(!this.canAttack(u,v,tile))return {ok:false,message:'사거리 · 행동력 · 출격 상태를 확인하세요.'};
+    const {ratio,posture}=this.combatPreview(u,v,tile);
     const die=1+Math.floor(this.random()*6);
     // Abstract combat results table: damage is cohesion loss, never personnel.
     const column=ratio<.5?0:ratio<.8?1:ratio<1.2?2:ratio<1.8?3:ratio<2.8?4:5;
-    const outgoing=[10,17,24,32,41,50][column]+die*2;
+    const rolledDamage=[10,17,24,32,41,50][column]+die*2;
+    const outgoing=v.sector?Math.min(v.hp,sectorStrength(v,tile).committed,rolledDamage):rolledDamage;
     const incoming=[28,22,16,12,9,6][column]+(7-die);
-    const remote=(['air','navy'].includes(u.type)||(u.type==='artillery'&&this.board.distance(u.tile,v.tile)>1))&&TYPES[v.type].domain==='land';
-    const aa=this.alive(v.side).filter(a=>a.type==='airdefense'&&this.board.distance(a.tile,v.tile)<=9).length;
-    const taken=u.type==='air'?7+aa*7:remote?3:incoming;
-    v.hp=clamp(v.hp-outgoing);u.hp=clamp(u.hp-taken);
+    const remote=(['air','navy'].includes(u.type)||(u.type==='artillery'&&this.board.distance(u.tile,tile)>1))&&TYPES[v.type].domain==='land';
+    const aa=this.alive(v.side).filter(a=>a.type==='airdefense'&&this.board.distance(a.tile,tile)<=9).length;
+    const counterDamage=u.type==='air'?7+aa*7:remote?3:incoming;
+    const taken=u.sector?Math.min(u.hp,sectorStrength(u,tile).committed,counterDamage):counterDamage;
+    for(const command of [u,v])if(command.sector)command.sector.engaged=sectorStrength(command,tile).committed;
+    const sectorBattle=!!v.sector;
+    applySectorLoss(v,tile,outgoing);applySectorLoss(u,tile,taken);
     u.ap=Math.max(0,u.ap-(u.type==='air'?1:4));u.acted=true;u.entrenched=false;u.supply=clamp(u.supply-15);v.supply=clamp(v.supply-8);
     this.state.losses[u.side]+=taken;this.state.losses[v.side]+=outgoing;
     const harm=posture==='careful'?.15:posture==='push'?1.1:.5;
     this.state.civilians=clamp(this.state.civilians-harm);this.state.escalation=clamp(this.state.escalation+(posture==='push'?3:.6));
-    const site=this.state.sites.find(s=>s.tile===v.tile);
+    const site=this.state.sites.find(s=>s.tile===tile);
     if(site)site.health=clamp(site.health-(posture==='careful'?2:posture==='push'?12:6));
-    if(v.hp<12){v.hp=0;this.destroyTransport(v);this.log(`${v.name} 전투 이탈.`,v.side==='red'?'good':'danger');}
-    if(u.hp<12){u.hp=0;this.destroyTransport(u);}
-    if(v.hp===0&&['army','armor'].includes(u.type)&&u.hp>0){u.tile=v.tile;this.capture(u,u.tile);}
-    this.log(`${u.name} → ${v.name} · 전력 -${outgoing} / 반격 -${taken} · 주사위 ${die}`,u.side==='blue'?'combat':'danger');
+    if(v.hp<12&&!v.sector){v.hp=0;this.destroyTransport(v);this.log(`${v.name} 전투 이탈.`,v.side==='red'?'good':'danger');}
+    if(u.hp<12&&!u.sector){u.hp=0;this.destroyTransport(u);}
+    for(const command of [u,v])if(command.sector)command.sector.engaged=0;
+    if((v.hp===0||(sectorBattle&&!this.responsible(tile,v.side)&&tile!==v.tile))&&!u.sector&&['army','armor'].includes(u.type)&&u.hp>0&&this.canEnter(u,tile)){u.tile=tile;this.capture(u,u.tile);}
+    this.log(`${u.name} → ${v.name} (헥스 ${tile}) · 전력 -${outgoing} / 반격 -${taken} · 주사위 ${die}`,u.side==='blue'?'combat':'danger');
     this.refreshSupply();if(!ai)this.checkResult();
     return {ok:true,message:`전투 결과 · 적 전력 -${outgoing}, 아군 -${taken}`};
   }
@@ -363,6 +391,9 @@ export class Game {
     const blue=this.alive('blue');
     for(const u of this.alive('red')){
       if(u.type==='airdefense'){u.entrenched=true;continue;}
+      const sectorTarget=blue.flatMap(v=>v.sector?.allocations.map(a=>a.tile)??[]).find(tile=>this.canAttackTile(u,tile));
+      if(sectorTarget!==undefined){this.attackTile(u.id,sectorTarget,true);continue;}
+      if(u.sector){const local=u.sector.allocations.find(a=>this.canAttackTile(u,a.tile));if(local)this.attackTile(u.id,local.tile,true);continue;}
       const targets=blue.filter(v=>this.canAttack(u,v)).sort((a,b)=>a.hp-b.hp);
       if(targets.length){this.attack(u.id,targets[0].id,true);continue;}
       if(['army','armor','navy'].includes(u.type)){
@@ -476,6 +507,7 @@ export class Game {
           u.tile=nearest(u.tile,t=>t.sea&&this.board.links[anchor].includes(t.id));
         }else u.tile=nearest(u.tile,t=>t.home===prior.home);
       }
+      for(const u of s.units)if(u.sector)u.sector.allocations=u.sector.allocations.map(a=>({...a,tile:nearest(a.tile,t=>!t.sea&&!t.foreign)}));
       for(const u of s.units)if(u.embarked)u.tile=s.units.find(v=>v.id===u.embarked).tile;
       for(const site of s.sites)site.tile=fresh.sites.find(v=>v.id===site.id).tile;
       for(const objective of s.objectives)objective.tile=fresh.objectives.find(v=>v.id===objective.id).tile;
@@ -511,6 +543,12 @@ export class Game {
     for(const u of s.units){
       if(u.embarked){const carrier=s.units.find(x=>x.id===u.embarked);if(!carrier||carrier.passenger!==u.id||carrier.type!=='transport'||carrier.tile!==u.tile||carrier.side!==u.side)throw Error('수송 상태가 손상되었습니다.');}
       if(u.passenger){const p=s.units.find(x=>x.id===u.passenger);if(u.type!=='transport'||!p||p.embarked!==u.id)throw Error('승선 상태가 손상되었습니다.');}
+    }
+    const sectorClaims=new Set();
+    for(const u of s.units)if(u.sector!==undefined&&u.sector!==null){
+      validateSector(u.sector,this.board);
+      if(!this.isDivision(u)||u.sector.commandId!==u.id||u.sector.commandLevel!=='division')throw Error('전투지경선 지휘부가 올바르지 않습니다.');
+      for(const a of u.sector.allocations){const key=u.side+':'+a.tile;if(sectorClaims.has(key))throw Error('전투지경선이 중복되었습니다.');sectorClaims.add(key);}
     }
     const siteIds=new Set();
     for(const f of s.sites){const orig=template.sites.find(x=>x.id===f.id);if(!orig||siteIds.has(f.id)||f.tile!==orig.tile||f.home!==orig.home||f.kind!==orig.kind||typeof f.name!=='string'||f.name.length>80||!validNum(f.health,0,100)||!validNum(f.shelter,0,1))throw Error('시설 데이터가 손상되었습니다.');siteIds.add(f.id);}

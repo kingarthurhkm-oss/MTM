@@ -60,6 +60,8 @@ function draw(){
   if(camera.zoom>.8){ctx.strokeStyle='#7796a325';ctx.lineWidth=.5/camera.zoom;for(const t of tiles){hex(ctx,t);ctx.stroke();}}
   if(mode==='move'){for(const [id] of reachable){const t=game.board.tiles[id];ctx.fillStyle='#76c9e936';hex(ctx,t);ctx.fill();ctx.strokeStyle='#8bceda77';ctx.lineWidth=.6/camera.zoom;ctx.stroke();}}
   if(selected&&layer==='supply'){const path=game.supplyPath(game.unit(selected));ctx.strokeStyle='#97d8bd';ctx.lineWidth=2/camera.zoom;ctx.setLineDash([6/camera.zoom,4/camera.zoom]);ctx.beginPath();path.forEach((id,i)=>{const t=game.board.tiles[id];i?ctx.lineTo(t.x,t.y):ctx.moveTo(t.x,t.y);});ctx.stroke();ctx.setLineDash([]);}
+  const sector=selected?game.unit(selected)?.sector:null;
+  for(const a of sector?.allocations??[]){const t=game.board.tiles[a.tile];if(!on(t))continue;ctx.fillStyle='rgba(79,205,178,'+(.16+.7*a.share)+')';hex(ctx,t);ctx.fill();ctx.strokeStyle='#77e4c7';ctx.lineWidth=2/camera.zoom;ctx.stroke();}
   if(selectedTile!==null){const t=game.board.tiles[selectedTile];ctx.strokeStyle='#edbb70';ctx.lineWidth=2/camera.zoom;hex(ctx,t,1.05);ctx.stroke();}
   ctx.restore();
   const labels=[['대한민국',127.8,35.6,'#a9ccd0'],['북한',127.7,40.5,'#c6a1a3'],['중국 · 진입 불가',122,42,'#78868e'],['일본 · 진입 불가',137.7,36.7,'#78868e'],['홋카이도',143.1,43.35,'#a1adb3'],['오키나와',128.15,26.2,'#a1adb3'],['동 해',132.8,39.1,'#698b9e'],['서 해',123,35.5,'#698b9e']];
@@ -75,7 +77,7 @@ function draw(){
    if(mode==='attack'&&selected&&game.canAttack(game.unit(selected),u)){ctx.strokeStyle='#efae8b';ctx.lineWidth=2;ctx.strokeRect(p.x-size*.65,p.y-size*.65,size*1.3,size*1.3);}
    if(img.complete&&img.naturalWidth){const ih=size,iw=ih*img.naturalWidth/img.naturalHeight;ctx.drawImage(img,p.x-iw/2,p.y-ih/2,iw,ih);}
    ctx.fillStyle='#071720';ctx.fillRect(p.x-12,p.y+size/2+3,24,3);ctx.fillStyle=u.supply<30?'#f0b55e':u.side==='blue'?'#81c4d6':'#d29195';ctx.fillRect(p.x-12,p.y+size/2+3,24*u.hp/100,3);
-   if(camera.zoom>1.3||u.id===selected)textAt(u.name.split(' ')[0],p.x,p.y+size/2+16,u.side==='blue'?'#aed3df':'#d0a5aa',8);
+   if(camera.zoom>1.3||u.id===selected)textAt(u.name.split(' ')[0]+(u.sector?' HQ':''),p.x,p.y+size/2+16,u.side==='blue'?'#aed3df':'#d0a5aa',8);
    hitUnits.push({id:u.id,x:p.x,y:p.y,r:Math.max(size*.7,18)});
   }
   if(state().scenario===ARMY_SCENARIO&&camera.zoom>=2.5){
@@ -91,6 +93,11 @@ function mapClick(x,y){
  const u=selected?game.unit(selected):null;
  const hits=hitUnits.filter(h=>Math.hypot(h.x-x,h.y-y)<=h.r).sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y));
  if(mode==='unload'&&u){execute(game.unload(u.id,tile));mode='select';return;}
+ if(mode==='sector'&&u){
+  const rows=u.sector?.allocations??[],exists=rows.some(a=>a.tile===tile);
+  const ids=exists?rows.filter(a=>a.tile!==tile).map(a=>a.tile):[...rows.map(a=>a.tile),tile];
+  execute(game.setSector(u.id,ids.map(tile=>({tile,share:.8/ids.length})),ids.length ? .2 : 1));return;
+ }
  if(mode==='attack'&&u){const enemy=hits.map(h=>game.unit(h.id)).find(v=>v.side!=='blue');if(enemy){target=enemy.id;render();dirty=true;}else toast('표시된 적 부대를 선택하세요.');return;}
  if(mode==='move'&&u){execute(game.move(u.id,tile));selectedTile=u.tile;render();return;}
  if(hits.length){const own=hits.find(h=>game.unit(h.id).side==='blue');if(own){choose(own.id);return;}target=hits[0].id;selected=null;selectedSite=null;selectedTile=game.unit(target).tile;tab='command';render();dirty=true;return;}
@@ -124,10 +131,20 @@ function formationSummary(f){
  const parent=armyFormation(f.parent_unit),region=ARMY_DATA.regions[f.region_id];
  return `<div class="formation-info"><p>${esc(f.unit_level)} · ${esc(f.unit_type)} · 상급 ${esc(parent?.unit_name||'—')}<br>시작 권역: ${esc(region.province)} ${esc(f.region)}${f.region_basis==='parent_region_game_fallback'?' (임시 게임 배정)':''}</p>${f.deployable?`<dl class="formation-stats">${[['mobility','기동'],['firepower','화력'],['armor','장갑'],['reconnaissance','정찰'],['logistics','군수']].map(([k,label])=>`<div><dt>${label}</dt><dd>${f[k]}</dd></div>`).join('')}</dl><p>0–100 게임 상대 점수 · 실제 전투력 아님</p>`:'<p>지휘부는 편제표 전용 · 전투 스탯 적용 없음</p>'}<p>대표 장비: ${f.major_equipment.length?esc(f.major_equipment.join(', ')):'부대별 확인 자료 미수록'}<br>${f.verification==='partial_official'?'일부 항목 공식 자료 교차확인':'2차 자료 기반 · 공식 추가 확인 필요'} · 열람 ${esc(f.source_date)}</p></div>`;
 }
-function unitPanel(u){return `<div class="section-label">SELECTED FORMATION · ${u.side==='blue'?'FRIENDLY':'HOSTILE'}</div><div class="card"><div class="unit-header"><img src="${symbolPath(u.side,unitSymbol(u))}" alt="${esc(TYPES[u.type].name)} 기호"><div><h3>${esc(u.name)}</h3><small>${{land:'지상',air:'공중',sea:'해상'}[TYPES[u.type].domain]} 전력 · ${u.entrenched?'방어 태세':'기동 태세'}</small></div></div><div class="stats-grid"><div><label>전력</label><strong>${Math.round(u.hp)}<span>%</span></strong></div><div><label>보급</label><strong class="${u.supply<40?'damage':''}">${Math.round(u.supply)}<span>%</span></strong></div><div><label>이동력</label><strong>${u.ap.toFixed(1)}</strong></div></div><p class="context">${u.side==='blue'?`보급 연결 ${Math.round(game.supplyQuality(u)*100)}% · ${u.acted?'공격·출격 완료':'공격·출격 가능'}`:'정찰로 식별된 가상 부대'}${u.supply<40?' · 보급 부족 페널티 적용':''}</p>${u.side==='blue'?actionButtons(u):''}${formationSummary(game.formation(u))}${u.formationId?`<button class="formation-link" data-formation="${u.formationId}">편제·출처 자세히</button>`:''}${game.at(u.tile).filter(v=>v.side==='blue').length>1?`<button class="formation-link" data-stack="${u.tile}">같은 헥스 부대 선택 (${game.at(u.tile).filter(v=>v.side==='blue').length})</button>`:''}</div>`;}
+function fitSector(u){
+ const points=[u.tile,...(u.sector?.allocations.map(a=>a.tile)??[])].map(id=>game.board.tiles[id]);
+ const xs=points.map(t=>t.x),ys=points.map(t=>t.y),left=Math.min(...xs),right=Math.max(...xs),top=Math.min(...ys),bottom=Math.max(...ys);
+ camera.x=(left+right)/2;camera.y=(top+bottom)/2;camera.zoom=clamp(Math.min(width/(right-left+100),height/(bottom-top+100)),.12,6);dirty=true;
+}
+function sectorPanel(u){
+ if(!game.isDivision(u)||u.side!=='blue')return '';
+ const status=game.commandStatus(u),sector=status.sector,disabled=!game.active(u)||processing?' disabled':'';
+ return '<div class="sector-panel"><div class="section-label">COMBAT SECTOR · 사단 지휘</div><p class="context">HQ 헥스 '+u.tile+' · 총 전투력 '+u.hp.toFixed(1)+'<br>예비 '+(sector?status.reserve.toFixed(1)+' ('+Math.round(sector.reserveShare*100)+'%)':'미지정')+' · 교전 중 '+status.engaged.toFixed(1)+'</p><p class="policy-note">'+(sector?'기호는 HQ입니다. 전력은 지경선과 예비로 분산됩니다.':'지경선 미지정: 기존 부대 방식으로 작동합니다.')+'</p><button data-mode="sector"'+disabled+'>전투지경선 지정 / 해제</button><button data-action="sector-overview">HQ·지경선 전체 보기</button><p class="policy-note">지도에서 아군 육지 타일을 누르세요. 추가·해제 시 전선 80%를 균등 배분하고 예비 20%를 둡니다. ±로 예비와 5%씩 재배치합니다.</p>'+(sector?.allocations??[]).map(a=>'<div class="sector-row"><button data-sector-center="'+a.tile+'">헥스 '+a.tile+'</button><meter min="0" max="1" value="'+a.share+'" aria-label="헥스 '+a.tile+' 배분"></meter><span>'+Math.round(a.share*100)+'% · '+(a.share*u.hp).toFixed(1)+'</span><button data-sector-tile="'+a.tile+'" data-sector-delta="-0.05"'+disabled+'>−</button><button data-sector-tile="'+a.tile+'" data-sector-delta="0.05"'+disabled+'>+</button></div>').join('')+'</div>';
+}
+function unitPanel(u){return `<div class="section-label">SELECTED FORMATION · ${u.side==='blue'?'FRIENDLY':'HOSTILE'}</div><div class="card"><div class="unit-header"><img src="${symbolPath(u.side,unitSymbol(u))}" alt="${esc(TYPES[u.type].name)} 기호"><div><h3>${esc(u.name)}</h3><small>${{land:'지상',air:'공중',sea:'해상'}[TYPES[u.type].domain]} 전력 · ${u.entrenched?'방어 태세':'기동 태세'}</small></div></div><div class="stats-grid"><div><label>전력</label><strong>${Math.round(u.hp)}<span>%</span></strong></div><div><label>보급</label><strong class="${u.supply<40?'damage':''}">${Math.round(u.supply)}<span>%</span></strong></div><div><label>이동력</label><strong>${u.ap.toFixed(1)}</strong></div></div><p class="context">${u.side==='blue'?`보급 연결 ${Math.round(game.supplyQuality(u)*100)}% · ${u.acted?'공격·출격 완료':'공격·출격 가능'}`:'정찰로 식별된 가상 부대'}${u.supply<40?' · 보급 부족 페널티 적용':''}</p>${u.side==='blue'?actionButtons(u):''}${sectorPanel(u)}${formationSummary(game.formation(u))}${u.formationId?`<button class="formation-link" data-formation="${u.formationId}">편제·출처 자세히</button>`:''}${game.at(u.tile).filter(v=>v.side==='blue').length>1?`<button class="formation-link" data-stack="${u.tile}">같은 헥스 부대 선택 (${game.at(u.tile).filter(v=>v.side==='blue').length})</button>`:''}</div>`;}
 function renderCommand(){
  let html='';const u=selected?game.unit(selected):null,v=target?game.unit(target):null;
- if(u&&u.hp>0){html+=unitPanel(u);if(mode!=='select')html+=`<p class="action-hint">${{move:'빛나는 헥스를 누르면 이동합니다. 먼 목적지는 이번 턴 이동력만큼 진행합니다.',attack:'테두리가 표시된 적 부대를 눌러 전투 조건을 확인하세요.',unload:'수송선단에 인접한 아군 해안을 누르세요.'}[mode]} <button data-mode="select" class="subtle-btn">명령 취소</button></p>`;
+ if(u&&u.hp>0){html+=unitPanel(u);if(mode!=='select')html+=`<p class="action-hint">${{sector:'아군 타일을 누르면 담당 지경선에 추가하거나 해제합니다.',move:'빛나는 헥스를 누르면 이동합니다. 먼 목적지는 이번 턴 이동력만큼 진행합니다.',attack:'테두리가 표시된 적 부대를 눌러 전투 조건을 확인하세요.',unload:'수송선단에 인접한 아군 해안을 누르세요.'}[mode]} <button data-mode="select" class="subtle-btn">명령 취소</button></p>`;
   if(v){const can=game.canAttack(u,v),p=game.combatPreview(u,v);html+=`<div class="attack-preview"><p>${esc(v.name)}<br>예상 전투비 <strong>${p.ratio.toFixed(2)} : 1 · ${p.band}</strong><br><small>실제 결과에는 주사위·지형·보급·지원이 반영됩니다.</small></p><button data-action="attack" class="danger" ${!can?'disabled':''}>전투 실행</button></div>`;}
  }else if(v&&v.hp>0){html+=unitPanel(v);}
  else if(selectedSite){const s=state().sites.find(s=>s.id===selectedSite);html+=`<div class="section-label">INFRASTRUCTURE</div><div class="card"><div class="unit-header"><span class="site-mark">${SITE_TYPES[s.kind].mark}</span><h3>${esc(s.name)}</h3></div><div class="stats-grid"><div><label>가동률</label><strong>${Math.round(s.health)}<span>%</span></strong></div><div><label>통제</label><strong style="font-size:15px">${game.owned(s.tile,'blue')?'대한민국':'북한'}</strong></div></div><p class="context">${SITE_TYPES[s.kind].effect}<br>${s.health>=75?'정상 가동':s.health>=40?'부분 가동':s.health>=20?'제한 가동':'기능 상실'} · 피해율에 비례해 효율 감소</p><div class="actions-grid"><button class="wide" data-action="repair" ${!game.owned(s.tile,'blue')||s.health>=100?'disabled':''}>시설 복구 +28%p<span class="cost">지휘점 2 · 자재 12</span></button></div></div>`;}
@@ -162,7 +179,7 @@ function render(){
   html+='<div class="section-label">OPERATION LOG</div>'+s.log.map(l=>`<div class="log-row ${esc(l.kind)}"><small>TURN ${String(l.turn).padStart(2,'0')}</small>${esc(l.text)}</div>`).join('');
  }
  $('panel-content').innerHTML=html;
- $('map-hint').textContent=mode==='move'?'이동 모드 · 목적지 헥스를 터치하세요':mode==='attack'?'공격 모드 · 적 부대를 선택하세요':layer==='supply'?'청록: 원활 · 황색: 감소 · 적색: 단절':layer==='infrastructure'?'시설을 누르면 복구 명령을 확인할 수 있습니다':'부대 선택 → 이동 또는 공격 → 턴 종료';
+ $('map-hint').textContent=mode==='sector'?'지경선 지정 · 아군 육지 타일을 터치하세요':mode==='move'?'이동 모드 · 목적지 헥스를 터치하세요':mode==='attack'?'공격 모드 · 적 부대를 선택하세요':layer==='supply'?'청록: 원활 · 황색: 감소 · 적색: 단절':layer==='infrastructure'?'시설을 누르면 복구 명령을 확인할 수 있습니다':'부대 선택 → 이동 또는 공격 → 턴 종료';
  dirty=true;
 }
 function modal(html){$('modal-content').innerHTML=html;if(!$('modal').open)$('modal').showModal();}
@@ -195,12 +212,15 @@ document.addEventListener('click',e=>{
  if(d.filter){filter=d.filter;render();}
  if(d.site){selectedSite=d.site;selected=null;target=null;tab='command';selectedTile=state().sites.find(s=>s.id===d.site).tile;centerTile(selectedTile);render();}
  if(d.objective){const obj=state().objectives.find(o=>o.id===d.objective);centerTile(obj.tile);}
+ if(d.sectorCenter!==undefined)centerTile(Number(d.sectorCenter));
+ if(d.sectorTile!==undefined&&selected){const u=game.unit(selected),tile=Number(d.sectorTile),a=u.sector.allocations.find(a=>a.tile===tile),delta=Number(d.sectorDelta);const amount=Math.max(-a.share,Math.min(u.sector.reserveShare,delta));execute(game.setSector(u.id,u.sector.allocations.map(a=>({...a,share:a.share+(a.tile===tile?amount:0)})),u.sector.reserveShare-amount));}
  if(d.mode){mode=d.mode;target=null;if(selected)reachable=game.reachable(game.unit(selected));render();}
  if(d.posture&&!state().result){state().posture=d.posture;autosave();render();}
  if(d.policy)execute(game.policy(d.policy));
  if(d.mission&&selected)execute(game.airMission(selected,d.mission));
  if(d.action){
   if(d.action==='first-unit'){const u=game.alive('blue').find(u=>['army','armor'].includes(u.type));if(u)choose(u.id,true);}
+  if(d.action==='sector-overview'&&selected)fitSector(game.unit(selected));
   if(d.action==='center'&&selected)centerTile(game.unit(selected).tile);
   if(d.action==='fortify'&&selected)execute(game.fortify(selected));
   if(d.action==='repair'&&selectedSite)execute(game.repair(selectedSite));
