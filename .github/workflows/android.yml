@@ -38,7 +38,7 @@ jobs:
           name: peninsula-2026-android
           path: |
             app/build/outputs/apk/debug/app-debug.apk
-            dist/peninsula-2026.html
+            dist/peninsula-2026-v*.html
             app/build/reports/lint-results-debug.html
           if-no-files-found: error
           retention-days: 30

@@ -1,6 +1,7 @@
 {
   "name": "peninsula-2026",
   "version": "0.1.0",
+  "htmlRelease": "v2",
   "private": true,
   "type": "module",
   "description": "Offline fictional turn-based strategy game for Android",

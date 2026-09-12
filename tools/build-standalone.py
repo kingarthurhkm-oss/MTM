@@ -30,7 +30,19 @@ code = code.replace("const symbolPath=(side,type)=>`symbols/${side}-${type}.svg`
 html = re.sub(r'  <meta http-equiv="Content-Security-Policy"[^>]+>\n', '', html)
 html = html.replace('<link rel="stylesheet" href="style.css">', '<style>' + css + '</style>')
 html = html.replace('<script type="module" src="ui.js"></script>', '<script>\n(()=>{\n' + code.replace('</script', '<\\/script') + '\n})();\n</script>')
-targets = [out / 'peninsula-2026.html', root / 'downloads/peninsula-2026-army.html']
+# One versioned release name for both distribution routes.
+release = json.loads((root / 'package.json').read_text())['htmlRelease']
+if not re.fullmatch(r'v[1-9][0-9]*', release):
+    raise ValueError('htmlRelease must be v2, v3, ...')
+if f'PENINSULA 2026 {release}' not in html:
+    raise ValueError('HTML title and htmlRelease must agree')
+filename = f'peninsula-2026-{release}.html'
+targets = [out / filename, root / 'downloads' / filename]
 for target in targets:
     target.write_text(html)
     print('Created', target)
+
+# Retire the two ambiguous, unversioned distribution files after building.
+for directory in [out, root / 'downloads']:
+    for old_name in ['peninsula-2026.html', 'peninsula-2026-army.html']:
+        (directory / old_name).unlink(missing_ok=True)

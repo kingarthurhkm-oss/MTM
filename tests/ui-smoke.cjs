@@ -91,7 +91,7 @@ const server=http.createServer((req,res)=>{
   assert.deepEqual(errors,[]);
   await context.close();
   const standalone=await browser.newPage({viewport:{width:412,height:915}});standalone.on('pageerror',e=>errors.push(e.message));
-  await standalone.goto('file://'+path.resolve(__dirname,'../dist/peninsula-2026.html'));
+  await standalone.goto('file://'+path.resolve(__dirname,'../dist/peninsula-2026-'+require('../package.json').htmlRelease+'.html'));
   await standalone.locator('[data-modal="start"]').click();
   await standalone.locator('[data-action="first-unit"]').click();
   await standalone.locator('#end-turn').click();

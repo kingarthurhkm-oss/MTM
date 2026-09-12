@@ -20,7 +20,7 @@
 | Android Gradle 빌드·lint 재검증 | 실행 시도했으나 로컬 캐시에 AGP 8.9.2 플러그인이 없어 오프라인 의존성 해석 단계에서 실패. 이번 변경의 APK 빌드·lint 통과를 주장하지 않음 |
 | 실제 Android 기기/에뮬레이터 | 이번 작업에서 수행하지 않음 |
 
-브라우저의 모바일 화면 검증은 Android OS 실기기 검증과 다르다. 기존 Android Java·매니페스트·권한·서명 설정은 수정하지 않았다. 기존 `downloads/peninsula-2026-debug.apk`와 `downloads/peninsula-2026.html`은 그대로 보존했고, 새 실행 파일은 `downloads/peninsula-2026-army.html`이다. 기존 APK에는 이번 데이터 확장이 들어 있지 않으며 정상적인 Gradle 의존성 환경에서 다시 빌드해야 한다.
+브라우저의 모바일 화면 검증은 Android OS 실기기 검증과 다르다. 기존 Android Java·매니페스트·권한·서명 설정은 수정하지 않았다. 기존 `downloads/peninsula-2026-debug.apk`는 보존했다. 구형 HTML과 무버전 육군 HTML은 제거했고, 현재 실행 파일은 `downloads/peninsula-2026-v2.html`이다. 기존 APK에는 이번 데이터 확장이 들어 있지 않으며 정상적인 Gradle 의존성 환경에서 다시 빌드해야 한다.
 
 부대별 공개 사실의 검증 수준과 게임 규칙 검증은 다르다. 테스트 통과는 실제 편제·현행 배치의 진위를 공식 인증하지 않는다. 특히 102기갑여단은 상급 게임 권역으로 임시 배정했고, 다수 항목은 2차 자료에 기반한다. 자세한 범위는 [ARMY-DATA.md](ARMY-DATA.md)를 따른다. 장기 캠페인 난이도 조정은 아직 수행하지 않았다.
 
@@ -38,6 +38,10 @@ node tests/ui-smoke.cjs
 
 ## 변경 파일
 
-추가: `data/rok-army.json`, `army-data.js`, `army.js`(모두 `app/src/main/assets/game/` 아래), 같은 경로의 여단·포병 SVG 6개, `tools/build-army-data.py`, `tests/army.test.mjs`, `docs/ARMY-DATA.md`, `docs/ARMY-STATS.md`, 이 검증 기록, `downloads/peninsula-2026-army.html`.
+추가: `data/rok-army.json`, `army-data.js`, `army.js`(모두 `app/src/main/assets/game/` 아래), 같은 경로의 여단·포병 SVG 6개, `tools/build-army-data.py`, `tests/army.test.mjs`, `docs/ARMY-DATA.md`, `docs/ARMY-STATS.md`, 이 검증 기록, `downloads/peninsula-2026-v2.html`.
 
 수정: `app/src/main/assets/game/engine.js`, `ui.js`, `style.css`, `tools/build-standalone.py`, `tests/ui-smoke.cjs`, `package.json`, `README.md`. 기존 단위 테스트와 Android 소스는 유지했다. 변경 전부터 존재하던 `test-engine.log`는 수정하지 않았다.
+
+## v2 HTML 배포 수정
+
+원인: 기본 README 링크가 갱신되지 않은 120×240 HTML을 가리켰고, 생성기는 별도 army HTML만 갱신했다. 배포 파일을 `peninsula-2026-v2.html`로 통일하고 무버전 HTML 두 개를 삭제했다. 제목·상단 표시에도 v2를 넣었다. 최종 번들의 실제 Game을 실행해 240열·480행·115,200타일과 기본 육군 55개를 검사하는 회귀 테스트를 추가했다. 120×240 저장을 현재 맵으로 변환하는 호환 데이터는 실행용 구버전이 아니므로 유지한다.
