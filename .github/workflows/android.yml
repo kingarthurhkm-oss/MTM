@@ -53,7 +53,8 @@ jobs:
       - name: Prepare GitHub Pages site
         run: |
           mkdir -p _site
-          LATEST_HTML=$(ls -1 dist/peninsula-2026-v*.html | sort -V | tail -n 1)
+          LATEST_HTML=$(find dist -maxdepth 1 -type f -name 'peninsula-2026-v*.html' -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)
+          test -n "$LATEST_HTML"
           cp "$LATEST_HTML" _site/index.html
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
