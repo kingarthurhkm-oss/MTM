@@ -51,6 +51,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Prepare GitHub Pages site
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/peninsula-development'
         run: |
           mkdir -p _site
           LATEST_HTML=$(find dist -maxdepth 1 -type f -name 'peninsula-2026-v*.html' -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)
@@ -58,7 +59,9 @@ jobs:
           cp "$LATEST_HTML" _site/index.html
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/peninsula-development'
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/peninsula-development'
         with:
           path: _site
 
