@@ -2,11 +2,19 @@ name: Android game build
 
 on:
   push:
+    branches:
+      - codex/peninsula-development
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -42,3 +50,25 @@ jobs:
             app/build/reports/lint-results-debug.html
           if-no-files-found: error
           retention-days: 30
+      - name: Prepare GitHub Pages site
+        run: |
+          mkdir -p _site
+          LATEST_HTML=$(ls -1 dist/peninsula-2026-v*.html | sort -V | tail -n 1)
+          cp "$LATEST_HTML" _site/index.html
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/peninsula-development'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
