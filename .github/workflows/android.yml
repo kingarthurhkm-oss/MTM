@@ -56,6 +56,8 @@ jobs:
           test -n "$LATEST_HTML"
           cp "$LATEST_HTML" _site/index.html
           touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/peninsula-development'
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name == 'push' && github.ref == 'refs/heads/codex/peninsula-development'
         with:
