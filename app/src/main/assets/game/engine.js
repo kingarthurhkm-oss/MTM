@@ -389,26 +389,149 @@ export class Game {
   }
   aiTurn(){
     const blue=this.alive('blue');
-    for(const u of this.alive('red')){
-      if(u.type==='airdefense'){u.entrenched=true;continue;}
-      const sectorTarget=blue.flatMap(v=>v.sector?.allocations.map(a=>a.tile)??[]).find(tile=>this.canAttackTile(u,tile));
-      if(sectorTarget!==undefined){this.attackTile(u.id,sectorTarget,true);continue;}
-      if(u.sector){const local=u.sector.allocations.find(a=>this.canAttackTile(u,a.tile));if(local)this.attackTile(u.id,local.tile,true);continue;}
+    const red=this.alive('red');
+    if(!blue.length||!red.length)return;
+
+    // 1. Air defense units entrench and engage adjacent enemies if threatened
+    for(const u of red.filter(x=>x.type==='airdefense')){
       const targets=blue.filter(v=>this.canAttack(u,v)).sort((a,b)=>a.hp-b.hp);
-      if(targets.length){this.attack(u.id,targets[0].id,true);continue;}
-      if(['army','armor','navy'].includes(u.type)){
-        const domain=TYPES[u.type].domain;
+      if(targets.length&&targets[0].hp<30)this.attack(u.id,targets[0].id,true);
+      else u.entrenched=true;
+    }
+
+    // 2. Air units: strike high-value or vulnerable targets within range
+    for(const u of red.filter(x=>x.type==='air')){
+      if(u.ap<1||u.acted)continue;
+      const targets=blue.filter(v=>this.canAttack(u,v));
+      if(targets.length){
+        targets.sort((a,b)=>{
+          const scoreA=(this.state.objectives.some(o=>o.tile===a.tile)?500:0)+(a.hp<=25?200:0)+(a.type==='artillery'?150:0)-a.hp;
+          const scoreB=(this.state.objectives.some(o=>o.tile===b.tile)?500:0)+(b.hp<=25?200:0)+(b.type==='artillery'?150:0)-b.hp;
+          return scoreB-scoreA;
+        });
+        this.attack(u.id,targets[0].id,true);
+      }
+    }
+
+    // 3. Strategic Objective assignment for ground forces
+    const groundRed=red.filter(u=>['army','armor'].includes(u.type));
+    const garrisons=new Map();
+    const assignedUnits=new Set();
+
+    const sortedObjectives=[...this.state.objectives].sort((a,b)=>{
+      const aThreat=(a.held>0?100:0)+blue.filter(v=>this.board.distance(v.tile,a.tile)<=8).length*10;
+      const bThreat=(b.held>0?100:0)+blue.filter(v=>this.board.distance(v.tile,b.tile)<=8).length*10;
+      return bThreat-aThreat;
+    });
+
+    for(const obj of sortedObjectives){
+      const candidates=groundRed.filter(u=>!assignedUnits.has(u.id))
+        .sort((a,b)=>this.board.distance(a.tile,obj.tile)-this.board.distance(b.tile,obj.tile));
+      if(candidates.length){
+        const chosen=candidates[0];
+        if(this.board.distance(chosen.tile,obj.tile)<=18||obj.held>0||blue.some(v=>this.board.distance(v.tile,obj.tile)<=6)){
+          garrisons.set(chosen.id,obj);
+          assignedUnits.add(chosen.id);
+        }
+      }
+    }
+
+    const evalTarget=(u,v)=>{
+      const preview=this.combatPreview(u,v);
+      let s=preview.ratio*40;
+      if(this.state.objectives.some(o=>o.tile===v.tile))s+=1000;
+      else if(this.state.objectives.some(o=>this.board.distance(o.tile,v.tile)<=2))s+=200;
+      if(v.type==='transport'&&v.passenger)s+=400;
+      if(v.type==='artillery')s+=150;
+      if(v.type==='supply')s+=100;
+      if(v.hp<=25)s+=250;
+      else s+=(100-v.hp);
+      return s;
+    };
+
+    // 4. Execute ground & naval units
+    for(const u of red.filter(x=>['army','armor','navy'].includes(x.type))){
+      if(u.hp<=0)continue;
+      const domain=TYPES[u.type].domain;
+      const isGarrison=garrisons.has(u.id);
+      const targetObj=garrisons.get(u.id);
+
+      let goalTile=null;
+      if(isGarrison&&targetObj){
+        const intruder=blue.find(v=>v.hp>0&&TYPES[v.type].domain==='land'&&this.board.distance(v.tile,targetObj.tile)<=2);
+        goalTile=intruder?intruder.tile:targetObj.tile;
+      }else{
         const enemies=blue.filter(v=>v.hp>0&&!v.embarked&&TYPES[v.type].domain===domain);
-        enemies.sort((a,b)=>this.board.distance(u.tile,a.tile)-this.board.distance(u.tile,b.tile));
-        const goal=enemies[0];if(!goal)continue;
-        if(this.board.distance(u.tile,goal.tile)>22){u.entrenched=true;continue;}
+        if(!enemies.length)continue;
+        enemies.sort((a,b)=>{
+          const distA=this.board.distance(u.tile,a.tile);
+          const distB=this.board.distance(u.tile,b.tile);
+          const threatA=this.state.objectives.some(o=>this.board.distance(o.tile,a.tile)<=6)?-5:0;
+          const threatB=this.state.objectives.some(o=>this.board.distance(o.tile,b.tile)<=6)?-5:0;
+          return (distA+threatA)-(distB+threatB);
+        });
+        goalTile=enemies[0].tile;
+      }
+
+      if(goalTile===null)continue;
+      const initialDist=this.board.distance(u.tile,goalTile);
+
+      if(isGarrison&&initialDist<=1&&(!blue.some(v=>this.board.distance(v.tile,goalTile)<=2))){
+        const localTargets=blue.filter(v=>this.canAttack(u,v));
+        if(localTargets.length){
+          localTargets.sort((a,b)=>evalTarget(u,b)-evalTarget(u,a));
+          this.attack(u.id,localTargets[0].id,true);
+        }else{
+          u.entrenched=true;
+        }
+        continue;
+      }
+
+      let preTargets=blue.filter(v=>this.canAttack(u,v));
+      if(preTargets.length){
+        preTargets.sort((a,b)=>evalTarget(u,b)-evalTarget(u,a));
+        const best=preTargets[0];
+        const preview=this.combatPreview(u,best);
+        if(preview.ratio>=0.85||this.state.objectives.some(o=>o.tile===best.tile)||best.hp<=25){
+          this.attack(u.id,best.id,true);
+          continue;
+        }
+      }
+
+      if(initialDist>1||isGarrison){
         for(let step=0;step<3;step++){
           const options=this.board.links[u.tile].filter(k=>this.canEnter(u,k)&&this.moveCost(u,k)<=u.ap);
-          options.sort((a,b)=>this.board.distance(a,goal.tile)-this.board.distance(b,goal.tile));
-          const k=options[0];if(k===undefined||this.board.distance(k,goal.tile)>=this.board.distance(u.tile,goal.tile))break;
-          u.ap-=this.moveCost(u,k);u.tile=k;this.capture(u,k);
+          if(!options.length)break;
+          options.sort((a,b)=>{
+            const da=this.board.distance(a,goalTile);
+            const db=this.board.distance(b,goalTile);
+            if(da!==db)return da-db;
+            const ta=this.board.tiles[a].terrain==='mountain'?-1:0;
+            const tb=this.board.tiles[b].terrain==='mountain'?-1:0;
+            return ta-tb;
+          });
+          const nextTile=options[0];
+          if(nextTile===undefined||this.board.distance(nextTile,goalTile)>=this.board.distance(u.tile,goalTile))break;
+          u.ap-=this.moveCost(u,nextTile);
+          u.tile=nextTile;
+          this.capture(u,nextTile);
         }
-        if(this.canAttack(u,goal))this.attack(u.id,goal.id,true);
+      }
+
+      const postTargets=blue.filter(v=>this.canAttack(u,v));
+      if(postTargets.length){
+        postTargets.sort((a,b)=>evalTarget(u,b)-evalTarget(u,a));
+        const target=postTargets[0];
+        const preview=this.combatPreview(u,target);
+        if(preview.ratio>=0.65||this.state.objectives.some(o=>o.tile===target.tile)||target.hp<=25||u.hp>=50){
+          this.attack(u.id,target.id,true);
+        }else{
+          u.entrenched=true;
+        }
+      }else{
+        if(isGarrison||this.board.distance(u.tile,goalTile)<=3){
+          u.entrenched=true;
+        }
       }
     }
   }
