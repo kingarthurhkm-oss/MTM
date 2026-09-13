@@ -82,11 +82,15 @@ export class Game {
   // tile is the HQ position; hp is the total command strength, not HQ strength.
   commandStatus(u){return {hqTile:u.tile,sector:u.sector??null,parentCommandId:this.formation(u)?.parent_unit??null,canReallocate:!!this.active(u),...sectorStrength(u,null,0)};}
   responsible(tile,side){return sectorOwner(this.state.units,tile,side);}
+  sectorTileAvailable(u,tile){
+    const t=this.board.tiles[tile];
+    return !!t&&!t.sea&&!t.foreign&&this.owned(tile,u.side)&&!this.at(tile).some(v=>v.side!==u.side)&&!this.alive(u.side).some(v=>v.id!==u.id&&v.sector?.allocations.some(a=>a.tile===tile));
+  }
   setSector(id,allocations,reserveShare){
     const u=this.unit(id);if(!this.active(u)||!this.isDivision(u))return {ok:false,message:'활성 사단을 선택하세요.'};
     const sector={version:1,commandId:u.id,commandLevel:'division',allocations,reserveShare,engaged:0};
     try{validateSector(sector,this.board);}catch(e){return {ok:false,message:e.message};}
-    if(allocations.some(a=>!this.owned(a.tile,u.side)||this.at(a.tile).some(v=>v.side!==u.side)||this.alive(u.side).some(v=>v.id!==id&&v.sector?.allocations.some(b=>b.tile===a.tile))))return {ok:false,message:'아군 육지에만 지정할 수 있으며 다른 사단과 중복할 수 없습니다.'};
+    if(allocations.some(a=>!this.sectorTileAvailable(u,a.tile)))return {ok:false,message:'아군 육지에만 지정할 수 있으며 다른 사단과 중복할 수 없습니다.'};
     u.sector={...sector,allocations:allocations.map(a=>({...a}))};return {ok:true,message:'전투지경선과 예비 전력을 배분했습니다.'};
   }
   defenseAt(u,tile){return this.responsible(tile,u.side==='blue'?'red':'blue')??this.at(tile).find(v=>v.side!==u.side)??null;}
@@ -275,19 +279,22 @@ export class Game {
   }
   supplyPath(u){const parent=this.supplyCache[u.side]?.parent;if(!parent)return[];const out=[u.tile];let i=u.tile;for(let k=0;k<100&&parent[i]>=0;k++){i=parent[i];out.push(i);}return out;}
   visible(u){if(u.side==='blue')return true;return this.state.recon>0||this.alive('blue').some(a=>this.board.distance(a.tile,u.tile)<=this.reconRadius(a)||(!a.embarked&&a.sector?.allocations.some(b=>b.share>0&&b.tile===u.tile)));}
-  canAttack(u,v,tile=v?.tile){
-    if(!Number.isInteger(tile)||!this.board.tiles[tile])return false;
-    if(!u||!v||u.hp<=0||v.hp<=0||u.side===v.side||u.acted||u.embarked||v.embarked)return false;
-    const spec=this.spec(u);if(!spec.attack||u.ap<(u.type==='air'?1:3))return false;
-    if(u.side==='blue'&&!this.visible({...v,tile}))return false;
-    if(u.sector&&!u.sector.allocations.some(a=>a.tile===tile&&a.share>0))return false;
-    if(u.type==='air'&&this.supplyQuality(u)<.25)return false;
+  attackBlockReason(u,v,tile=v?.tile){
+    if(!Number.isInteger(tile)||!this.board.tiles[tile])return '공격 대상 없음';
+    if(!u||!v||u.hp<=0||v.hp<=0||u.side===v.side||u.embarked||v.embarked)return '공격 불가능 상태';
+    if(u.acted)return '이번 턴 공격 완료';
+    const spec=this.spec(u);if(!spec.attack)return '공격 불가능 병과';
+    if(u.ap<(u.type==='air'?1:3))return '이동력 부족';
+    if(u.side==='blue'&&!this.visible({...v,tile}))return '탐지 범위 밖';
+    if(u.sector&&!u.sector.allocations.some(a=>a.tile===tile&&a.share>0))return '전투지경선 밖';
+    if(u.type==='air'&&this.supplyQuality(u)<.25)return '출격 공항 가동률 부족';
     const ud=spec.domain,vd=TYPES[v.type].domain;
-    if(ud==='land'&&vd!=='land')return false;
-    if(ud==='sea'&&vd==='land'&&!this.board.links[tile].some(k=>this.board.tiles[k].sea))return false;
-    if(ud==='sea'&&vd==='air')return false;
-    return u.sector?true:this.board.distance(u.tile,tile)<=spec.range;
+    if(ud==='land'&&vd!=='land')return '해당 영역 공격 불가';
+    if(ud==='sea'&&vd==='land'&&!this.board.links[tile].some(k=>this.board.tiles[k].sea))return '해안 지원 사격 불가';
+    if(ud==='sea'&&vd==='air')return '공중 목표 공격 불가';
+    return !u.sector&&this.board.distance(u.tile,tile)>spec.range?'사거리 밖':'';
   }
+  canAttack(u,v,tile=v?.tile){return !this.attackBlockReason(u,v,tile);}
   combatPreview(u,v,tile=v.tile){
     v=this.responsible(tile,v.side)??v;
     const attackPower=sectorStrength(u,tile),defensePower=sectorStrength(v,tile);
@@ -298,7 +305,21 @@ export class Game {
     const terrain=this.board.tiles[tile].terrain==='mountain'?1.28:1;
     const d=this.spec(v).defense*(v.sector?defensePower.committed/100:(.3+.7*v.hp/100))*(.45+.55*v.supply/100)*terrain*(v.entrenched?1.3:1);
     const ratio=a/Math.max(1,d);
-    return {ratio,band:ratio<.67?'불리':ratio<1.25?'접전':ratio<2?'우세':'크게 우세',posture};
+    const low=this.combatDamage(u,v,tile,ratio,1),high=this.combatDamage(u,v,tile,ratio,6);
+    return {ratio,band:ratio<.67?'불리':ratio<1.25?'접전':ratio<2?'우세':'크게 우세',posture,terrain,cover,entrenchment:v.entrenched?1.3:1,
+      outgoing:[low.outgoing,high.outgoing],incoming:[high.taken,low.taken]};
+  }
+  // Shared results table: preview never rolls RNG; execution passes its actual die.
+  combatDamage(u,v,tile,ratio,die){
+    const column=ratio<.5?0:ratio<.8?1:ratio<1.2?2:ratio<1.8?3:ratio<2.8?4:5;
+    const rolledDamage=[10,17,24,32,41,50][column]+die*2;
+    const outgoing=v.sector?Math.min(v.hp,sectorStrength(v,tile).committed,rolledDamage):rolledDamage;
+    const incoming=[28,22,16,12,9,6][column]+(7-die);
+    const remote=(['air','navy'].includes(u.type)||(u.type==='artillery'&&this.board.distance(u.tile,tile)>1))&&TYPES[v.type].domain==='land';
+    const aa=this.alive(v.side).filter(a=>a.type==='airdefense'&&this.board.distance(a.tile,tile)<=9).length;
+    const counterDamage=u.type==='air'?7+aa*7:remote?3:incoming;
+    const taken=u.sector?Math.min(u.hp,sectorStrength(u,tile).committed,counterDamage):counterDamage;
+    return {outgoing,taken};
   }
   attack(id,target,ai=false,tile=null){
     const u=this.unit(id);let v=this.unit(target);
@@ -310,14 +331,7 @@ export class Game {
     const {ratio,posture}=this.combatPreview(u,v,tile);
     const die=1+Math.floor(this.random()*6);
     // Abstract combat results table: damage is cohesion loss, never personnel.
-    const column=ratio<.5?0:ratio<.8?1:ratio<1.2?2:ratio<1.8?3:ratio<2.8?4:5;
-    const rolledDamage=[10,17,24,32,41,50][column]+die*2;
-    const outgoing=v.sector?Math.min(v.hp,sectorStrength(v,tile).committed,rolledDamage):rolledDamage;
-    const incoming=[28,22,16,12,9,6][column]+(7-die);
-    const remote=(['air','navy'].includes(u.type)||(u.type==='artillery'&&this.board.distance(u.tile,tile)>1))&&TYPES[v.type].domain==='land';
-    const aa=this.alive(v.side).filter(a=>a.type==='airdefense'&&this.board.distance(a.tile,tile)<=9).length;
-    const counterDamage=u.type==='air'?7+aa*7:remote?3:incoming;
-    const taken=u.sector?Math.min(u.hp,sectorStrength(u,tile).committed,counterDamage):counterDamage;
+    const {outgoing,taken}=this.combatDamage(u,v,tile,ratio,die);
     for(const command of [u,v])if(command.sector)command.sector.engaged=sectorStrength(command,tile).committed;
     const sectorBattle=!!v.sector;
     applySectorLoss(v,tile,outgoing);applySectorLoss(u,tile,taken);

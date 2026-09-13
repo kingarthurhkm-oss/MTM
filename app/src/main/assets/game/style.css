@@ -16,3 +16,73 @@
 .formation-tree summary{cursor:pointer;padding:6px 2px;color:#dfbf88}.formation-tree ul{padding-left:18px}
 
 .sector-panel{margin-top:18px;border-top:1px solid #46606b;padding-top:12px}.sector-row{display:flex;align-items:center;gap:5px;margin:8px 0;flex-wrap:wrap}.sector-row meter{width:65px;accent-color:#77e4c7}.sector-row span{font-size:11px}.sector-row button{padding:6px;font-size:11px}
+
+/* Map-first command surface. Existing information panels are on-demand drawers. */
+[hidden]{display:none!important}
+main{display:block;position:relative}
+#map-section{height:100%;--dock-height:0px}
+#map-section.has-unit{--dock-height:98px}
+#sidebar{position:absolute;z-index:8;right:10px;top:10px;bottom:10px;width:min(380px,calc(100% - 20px));border:1px solid #49616b;border-radius:8px;box-shadow:0 12px 40px #0007;background:#101f26f5}
+#panel-close{align-self:flex-end;background:none;border:0;color:var(--blue);min-height:44px}
+.command-launcher{position:absolute;bottom:4px;left:12px;display:flex;gap:2px;background:#0b1b23ed;border:1px solid var(--line);border-radius:5px}
+.command-launcher button{min-width:44px;min-height:44px;border:0;background:none;font-size:10px;padding:6px 12px}
+.command-launcher button.active{color:var(--gold)}
+#unit-controls{position:absolute;bottom:54px;left:12px;right:12px;display:flex;flex-direction:column-reverse;align-items:flex-start;gap:4px;pointer-events:none}
+#unit-controls>*{pointer-events:auto}
+.unit-status-bar{display:flex;align-items:center;max-width:100%;min-height:48px;background:#0b1b23f2;border:1px solid #4e7883;border-radius:6px;box-shadow:0 4px 16px #0004}
+.unit-identity{border:0;background:none;display:flex;align-items:center;gap:8px;padding:4px 10px;min-height:44px;min-width:0;text-align:left;font-size:11px}
+.unit-identity img{width:32px;height:34px;object-fit:contain}
+.unit-identity span{max-width:155px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.unit-identity small{margin-left:5px;color:var(--gold);font:9px ui-monospace}
+.unit-stats{display:flex;align-items:center;gap:13px;padding:4px 10px;border-left:1px solid var(--line);white-space:nowrap;overflow-x:auto;scrollbar-width:thin}
+.unit-stat{display:flex;align-items:center;gap:4px;color:var(--blue);min-height:30px}
+.unit-stat b{color:var(--text);font:11px ui-monospace,monospace}
+.unit-stat svg,.unit-actions svg,.detail-toggle svg,.boundary-editor svg{width:16px;height:16px;flex-shrink:0}
+.detail-toggle{min-width:44px;min-height:44px;padding:8px;border:0;background:none;margin-left:auto;flex-shrink:0;color:var(--gold)}
+.detail-toggle[aria-expanded=true] svg{transform:rotate(180deg)}
+.unit-actions{display:flex;gap:4px;max-width:100%;overflow-x:auto;scrollbar-width:thin}
+.unit-actions button{display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;min-width:44px;padding:6px 10px;font-size:10px;background:#10232de8;white-space:nowrap}
+.unit-actions .boundary-button{border-color:#987641;color:var(--gold)}
+#interaction-card{position:absolute;z-index:5;left:12px;bottom:calc(58px + var(--dock-height));width:min(345px,calc(100% - 24px));max-height:calc(100% - 160px);overflow:auto;scrollbar-width:thin}
+.boundary-editor,.attack-preview{margin:0;border:1px solid #a6834e;border-radius:6px;background:#13252df5;padding:12px;box-shadow:0 6px 20px #0005}
+.boundary-editor strong{display:flex;align-items:center;gap:7px;color:var(--gold);font-size:12px}
+.boundary-editor strong span{margin-left:auto;font:11px ui-monospace}
+.boundary-editor p,.attack-preview p{font-size:10px;line-height:1.65;margin-top:6px;color:#a8bcc4}
+.attack-preview{border-color:#bc7178;background:#241f26f5}
+.attack-preview>strong{font-size:12px;color:#f0a1a7}
+.preview-loss{display:flex;gap:18px;margin:9px 0;font-size:10px;color:#b8c8ce}
+.preview-loss b{display:block;font:20px ui-monospace;color:#f2c481;margin-top:4px}
+.confirm-actions{display:flex;gap:8px;margin-top:10px;justify-content:flex-end}
+.confirm-actions button{min-width:78px;min-height:44px;width:auto;margin:0;font-size:11px}
+.sector-row button{min-width:44px;min-height:44px}
+#map-hint{bottom:calc(62px + var(--dock-height));left:14px;background:#0b1b23cf;padding:3px 6px;border-radius:3px;max-width:calc(100% - 190px)}
+#map-section[data-mode=sector] #map-hint,#map-section[data-mode=attack-preview] #map-hint,#map-section[data-mode=unload] #map-hint{display:none}
+#minimap{bottom:calc(18px + var(--dock-height))}
+.map-legend{bottom:6px;left:auto;right:185px;pointer-events:none}
+#map-section[data-mode=move] #map{cursor:crosshair}
+#map-section[data-mode=sector] #map{cursor:cell}
+#map-section[data-mode=attack-preview] #map{cursor:grab}
+@media(max-width:720px){
+ #unit-controls{left:8px;right:8px;bottom:54px}
+ .unit-status-bar{display:grid;grid-template-columns:minmax(0,1fr) 44px;width:100%;min-height:78px}
+ .unit-identity{min-height:40px;padding:2px 8px;font-size:11px}
+ .unit-identity img{height:30px;width:30px}
+ .unit-identity span{max-width:none}
+ .detail-toggle{grid-column:2;grid-row:1;min-height:44px}
+ .unit-stats{grid-column:1/-1;grid-row:2;gap:12px;padding:0 8px 3px;border-left:0;border-top:1px solid #273c4470}
+ .unit-stat{gap:3px;min-height:30px}.unit-stat b{font-size:10px}.unit-stat svg{width:14px;height:14px}
+ #map-section.has-unit{--dock-height:130px}
+ #sidebar{top:auto;bottom:4px;max-height:65%;right:6px;width:calc(100% - 12px)}
+ #minimap{bottom:calc(58px + var(--dock-height));width:78px;height:67px;right:10px}
+ #map-hint{bottom:calc(57px + var(--dock-height));max-width:calc(100% - 105px);font-size:8px}
+ .map-legend{right:10px;left:auto;bottom:10px;gap:7px;font-size:8px}
+ .command-launcher{left:8px}.command-launcher button{padding:5px 8px}
+ #interaction-card{bottom:138px;left:8px;width:min(345px,calc(100% - 16px));max-height:calc(100% - 146px)}
+ .map-controls button{min-width:44px;min-height:44px}
+}
+@media(max-height:540px) and (orientation:landscape){
+ #interaction-card{left:auto;right:8px;bottom:8px;max-height:calc(100% - 16px);width:290px}
+ #unit-controls{right:310px}.unit-status-bar{max-width:100%}.unit-stats{gap:10px}
+ .unit-identity span{max-width:90px}#minimap{bottom:8px}.map-legend{display:none}
+ #sidebar{top:5px;bottom:5px;max-height:none}
+}
