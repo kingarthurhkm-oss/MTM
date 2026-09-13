@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: github-pages
+  group: android-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -48,32 +48,3 @@ jobs:
             app/build/reports/lint-results-debug.html
           if-no-files-found: error
           retention-days: 30
-      - name: Prepare GitHub Pages site
-        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/peninsula-development'
-        run: |
-          mkdir -p _site
-          LATEST_HTML=$(find dist -maxdepth 1 -type f -name 'peninsula-2026-v*.html' -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)
-          test -n "$LATEST_HTML"
-          cp "$LATEST_HTML" _site/index.html
-          touch _site/.nojekyll
-      - uses: actions/configure-pages@v5
-        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/peninsula-development'
-      - uses: actions/upload-pages-artifact@v3
-        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/peninsula-development'
-        with:
-          path: _site
-
-  deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/codex/peninsula-development'
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
