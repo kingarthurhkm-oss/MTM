@@ -8,7 +8,7 @@ export const TYPES = {
   army: {name:'보병사단', domain:'land', mp:9, attack:17, defense:16, range:1},
   armor: {name:'기갑사단', domain:'land', mp:12, attack:22, defense:18, range:1},
   artillery: {name:'포병여단', domain:'land', mp:8, attack:23, defense:10, range:4},
-  air: {name:'전투비행단', domain:'air', mp:1, attack:19, defense:12, range:200},
+  air: {name:'전투비행단', domain:'air', mp:1, attack:19, defense:12, range:36},
   navy: {name:'해군전단', domain:'sea', mp:16, attack:21, defense:19, range:4},
   airdefense: {name:'방공여단', domain:'land', mp:7, attack:0, defense:15, range:9},
   transport: {name:'수송선단', domain:'sea', mp:15, attack:0, defense:8, range:0},
