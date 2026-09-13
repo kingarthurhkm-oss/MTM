@@ -1,102 +1,68 @@
-# Regular Hex map
+# Korea Board
 
-The refactor is based on `codex/peninsula-development` at
-`a4f05154daab741b921baca9eaca86a9d4532ba9`. That branch already contained
-240 × 480 tiles (115,200), rather than the older 120 × 240 map.
-Before publishing, concurrent remote changes were integrated through commit
-`51aee66`, including the latest air-wing range of 200. The full suite passed
-with this range and also with the intermediate remote value of 36; the
-standalone HTML was rebuilt to match the latest source.
+The sole game map is `korea-72x126-v1`. Both the public Army and fictional formation scenarios use this same Board. There is no East Asia mask, old-grid projection, old-map constructor, or fallback in the runtime. Saves require version 3 and the exact mapId; incompatible saves are rejected without mutating the current game. Autosaves use a separate Korea slot.
 
-## Coordinates and rendering
+## Authoritative inputs
 
-`hex.js` is the common flat-top regular hex implementation. For circumradius
-`s`, column pitch is `3s/2`, vertical pitch is `sqrt(3)s`, and every side is `s`.
-With the half-tile origin padding, axial coordinates project as:
+Vendored under `app/src/main/assets/game/data/korea-map/`:
+
+- `korea_72x126_mask.txt`: all land/sea cells, unchanged.
+- `korea_72x126_cities_ports_adjacent_sea.csv`: city row/col and corrected port_row/port_col. CSV display port coordinates are used even where original city coordinates differ, including Dokdo.
+- `korea_72x126_ktx_hex_paths.csv`: route_id, sequence and tile anchors, unchanged.
+- `korea_72x126_ktx_stations.csv`: station names and exact tile anchors.
+
+`source-manifest.json` records upstream Git blob identities. Text is normalized to LF for cross-platform checks; data values are unchanged. The generated module stores SHA-256 hashes of vendored inputs. `npm test` checks compilation freshness. PNG is a visual reference only, never runtime terrain or a build input.
+
+## Coordinate contract
+
+The upstream script calls the display flat-top in a comment, but its actual centers and polygons implement **pointy-top odd-r**. Follow its math, not that comment.
 
 ```
-x = s + 3s/2 * q
-y = sqrt(3)s/2 + sqrt(3)s * (r + q/2)
-distance(a,b) = max(abs(dq), abs(dr), abs(dq + dr))
+axial.q = col - floor(row / 2)
+axial.r = row
+col = axial.q + floor(axial.r / 2)
+row = axial.r
+tile.id = row * metadata.columns + col
+
+x = sqrt(3)*radius/2 + sqrt(3)*radius*(axial.q + axial.r/2)
+y = radius + 1.5*radius*axial.r
+distance = max(abs(dq), abs(dr), abs(dq + dr))
 ```
 
-The inverse projection uses cube rounding. `Board.closest()` returns the
-containing tile, or -1 outside the grid; it no longer snaps empty map space to
-an edge tile. `worldToScreen` and `screenToWorld` share a uniform camera zoom.
-`HexLayout` supplies all polygon corners, edges and complete map bounds.
+The half-hex padding is the only translation from Manus centers. Hex corners are at angles 30 + 60k degrees. Axial direction indices are NW, SE, W, SW, NE, E; opposites are 1,0,5,4,3,2. `tile.q/r` remain offset aliases for existing callers; `tile.axial` is always the geometry coordinate. No algorithm substitutes offset coordinates for axial ones. Clicks use the inverse pointy-top projection followed by cube rounding. `HexLayout` generates bounds, polygons and coastline edges. Camera fitting, minimap, labels, pointer transforms, paths, range rings and sectors all use these same coordinates.
 
-The retained grid occupies approximately 2413.389 × 5571.551 world units.
-The renderer does not compress it to the old Mercator rectangle. **Consequently
-the map has a taller geographic presentation than before:** geographic labels
-follow the retained tile mask, rather than claiming a scale-preserving Mercator
-projection. This preserves every tile's land/sea identity and adjacency without
-relocating units. Camera fit and the letterboxed minimap use the new bounds.
-The maximum hex distance across South Korean tiles adjacent to North Korea is
-24 steps, approximately the requested twenty-tile front.
+## Facilities and rail
 
-Existing `ownersRLE` is the sole land/sea source. Every tile is painted; the
-country polygons, graticule and decorative island ellipses no longer form a
-second map underneath the grid. All 6,394 land-to-sea edges are rendered once
-as coastlines. Foreign land retains its display-only rule. The overview cache
-and minimap are generated from these tiles, and zoomed views draw vector tile
-geometry directly to avoid magnifying a raster coastline. Existing fictional
-infrastructure lines remain supported.
+8 cities, 15 ports and 35 stations are ordinary Game sites with health, ownership, repair and supply behavior. Another 30 fictional power/comms/road/airport/energy sites preserve existing support systems. There are no procedural extra ports or imaginary rail lines. All ports are validated as coastal land with at least one sea neighbor.
 
-## Compatibility
+Every CSV route retains its original ordered `points`. Expanded `segments` record the exact path between successive source sequence anchors. Deduplicated symmetric railEdges drive movement and supply discounts, and the renderer draws those same edges. Adjacent rail tiles without an edge do not receive a rail discount. Roads are rebuilt without clearing railEdges.
 
-- `tile.id`, `tile.q`, `tile.r`, `Board.id(q,r)` and Army region anchors retain
-  the existing odd-q offset convention: `id = row * columns + column`.
-- `tile.axial = {q: column, r: row - floor(column/2)}` is the standard coordinate.
-  `Board.axialId()` reverses the conversion. Six axial direction vectors preserve
-  the old neighbor order as well as neighbor membership.
-- Movement, range, supply and Combat Boundary continue to use the same tile
-  IDs, links and hex distances. HQ positions and sector allocations are unchanged.
-- Legacy geographic coordinates are used only for deterministic scenario
-  placement, geographic anchor lookup and v1 save conversion. They do not pick
-  screen clicks. Version 2 saves require no migration or version bump.
-- The existing synthetic mountain classifications were renamed `legacyTerrain`.
-  Existing movement, combat, supply and AI effects still read them with identical
-  constants. Future terrain metadata does not affect game rules.
+The source has two inconsistencies that cannot be fixed by coordinate conversion alone:
 
-## Future metadata defaults
+| Source span | Explicit connection |
+|---|---|
+| 경부고속철도 sequence 19 → 20 | 082-34 → **082-35** → 083-35 |
+| 수서고속철도 SRT sequence 16 → 17 | 082-34 → **082-35** → 083-35 |
+| 강릉선 KTX sequence 7 → 8 | 070-37 → **070-38** → 071-38 |
 
-| Field | Allowed values | Default |
-|---|---|---|
-| domain | land / sea | Existing ownership mask |
-| terrain | plains / hills / mountain | plains |
-| forest | boolean | false |
-| urban | none / low / medium / high | none |
-| riverEdges | Edge indices 0–5 | [] |
-| roadEdges | Edge indices 0–5 | [] |
-| railEdges | Edge indices 0–5 | [] |
+The three spans are two graph steps apart. Each gets the shortest land connection; original endpoints and sequence numbers remain intact. A disconnected path fails loudly instead of producing a visual-only line.
 
-Each tile owns separate edge arrays. Direction indices are north, south,
-northwest, southwest, northeast, southeast, in that order. Opposites are
-1, 0, 5, 4, 3, 2. This schema does not populate real terrain, forests, cities,
-rivers, roads or railways. No GIS, DEM or OSM data was researched or downloaded.
+Mokpo station and Honam sequence 42 are **100-25**, which the mask marks as sea. The real port is the adjacent land tile **100-26**. Both sources are preserved: 100-25 remains neutral sea, with an explicit railBridge terminal reachable by land units/supply only over its rail edge. It does not permit walking into neighboring ordinary sea. The terminal's effective site control follows its connected shore; its sea tile control remains neutral. This is a source-data compatibility rule, not a claim about an actual offshore station.
 
-## Validation (2026-09-13)
+## Ownership and formation placement
 
-- Full Node suite: 52 passing tests, including AI, Army, engine, saves, sectors,
-  actual UI event handlers, geometry and the generated standalone HTML.
-- Exhaustive geometry: all 115,200 tile centers round trip; all six side lengths
-  and radii agree; shared endpoints coincide; adjacent centers have equal spacing
-  and hex distance 1; complete tile polygons fit inside map bounds.
-- Pointer geometry: points just inside/outside all six edges on odd and even
-  columns select the correct tile through camera zooms 0.12, 0.8, 3 and 6.
-- Land/sea owners exactly match the original RLE. Coastline coverage has no
-  missing or duplicated land/sea edges.
-- Pre-refactor snapshots: both initial scenarios and both v1 save conversions
-  produce byte-identical state hashes. Version 2 saves round trip unchanged.
-- Actual browser game: source assets and generated offline HTML were opened;
-  regular hexes, coastlines without the polygon background, unit selection,
-  reachable highlights, a one-hex move (9 → 7.8 AP under existing rules), sector
-  editing/confirmation, pan and cursor-anchored wheel zoom were checked. The
-  committed sector stayed aligned with its tile through pan and zoom. Browser
-  warnings/errors were empty. Pinch and pointer cancellation also pass the
-  existing UI event tests. Android APK/device execution was not performed.
+The inputs supply no country mask or geographic transform. An affine fit from original city raw offsets and lon/lat georeferences the new grid. Only the Korean country polygons from the previously bundled Natural Earth dataset are retained as build-time boundary metadata. Polygon inclusion assigns initial ownership; generalized coastal/island cells outside vector outlines use the nearest Korean boundary. No old tile mask or projection participates. Sea is always 0/neutral. City ownership is checked against named countries.
 
-`tests/fixtures/map-v2-state-hashes.json` contains SHA-256 hashes captured from
-the base commit before modifying the engine, not regenerated expected states.
-`downloads/peninsula-2026-v3.html` is rebuilt from the new modules. The existing
-APK remains the prior build.
+Army `region_id` resolves to a source city/station where available, otherwise an approximate municipality representative from `municipalities.json`. `place-army-regions.mjs` computes the nearest blue land tile, never reads/scales old hexes, and records the anchor basis in rok-army.json. Deployment chooses the nearest unoccupied blue land by hex distance, then world distance and stable tile ID. Support units reserve their positions first. Remaining support/naval collisions disperse on the correct domain; transports retain their adjacent port berth. Region labels continue to identify the starting municipality while unit.tile records its current location.
+
+Terrain defaults to plains because the authoritative inputs supply no terrain elevations. Forest/river metadata remains empty. Combat and terrain modifier hooks remain in the engine. Distances and action ranges stay in game hexes, without any geographic scale conversion.
+
+## Rebuild and verify
+
+```
+npm run build:map
+npm test
+npm run standalone
+```
+
+[Current verification results](KOREA-VALIDATION.md). Pages deploys the standalone v4 bundle from main. Android also builds from main, packaging the exact same game assets.

@@ -1,6 +1,6 @@
 # PENINSULA 2026
 
-[Android APK 다운로드](https://github.com/kingarthurhkm-oss/MTM/raw/refs/heads/main/downloads/peninsula-2026-debug.apk) · [소스 ZIP](https://github.com/kingarthurhkm-oss/MTM/archive/refs/heads/main.zip) · [오프라인 HTML](downloads/peninsula-2026-v3.html)
+[웹에서 플레이](https://kingarthurhkm-oss.github.io/MTM/) · [최신 Android 빌드](https://github.com/kingarthurhkm-oss/MTM/actions/workflows/android.yml) · [소스 ZIP](https://github.com/kingarthurhkm-oss/MTM/archive/refs/heads/main.zip) · [오프라인 HTML](downloads/peninsula-2026-v4.html)
 
 ![Android 화면](docs/android-preview.png)
 
@@ -8,23 +8,23 @@
 
 2026년은 시나리오 배경입니다. 기본 시나리오는 **공개 육군 편제**로, 공개 부대명과 시군 대표 게임 권역을 사용합니다. 기존 가상 편제는 새 시나리오 메뉴의 호환 선택지로 유지합니다. 전투력·시설·지원전력·적군·작전·피해 수치는 가상이며 실제 전쟁 예측값이 아닙니다.
 
-**육군 데이터 확장:** 지휘부 12개, 사단 33개, 독립 전투여단 22개를 편제표로 제공하며 새 게임에서 55개 부대를 기본으로 조작할 수 있습니다. [데이터 구조·편제·출처·미수록 범위](docs/ARMY-DATA.md), [스탯 산정 규칙](docs/ARMY-STATS.md), [추가 검증 기록](docs/ARMY-VALIDATION.md)을 참고하세요. [육군 확장 오프라인 HTML](downloads/peninsula-2026-v3.html)은 v3(240×480, 115,200타일)입니다. 구형 120×240 HTML은 삭제했습니다. 기존 APK는 이전 빌드입니다.
+**육군 데이터 확장:** 지휘부 12개, 사단 33개, 독립 전투여단 22개를 편제표로 제공하며 새 게임에서 55개 부대를 기본으로 조작할 수 있습니다. [데이터 구조·편제·출처·미수록 범위](docs/ARMY-DATA.md), [스탯 산정 규칙](docs/ARMY-STATS.md), [추가 검증 기록](docs/ARMY-VALIDATION.md)을 참고하세요. [육군 확장 오프라인 HTML](downloads/peninsula-2026-v4.html)은 v4(72×126, 9,072타일)입니다. 구형 지도 HTML·APK 배포물은 제거했습니다. 최신 Android 패키지는 main의 Actions 빌드에서 받으세요.
 
 ## 구현 범위
 
-정육각형 Hex 전환: 타일 자체의 육지·바다와 해안선으로 지도를 구성하며, 기존 타일 ID·유닛·전투지경선·저장 데이터를 유지합니다. [좌표계·호환 방식·검증 결과](docs/HEX-GRID.md)를 참고하세요.
+Korea Board 전환: korea-map의 마스크·도시·항만·KTX 경로·역을 실제 게임 보드와 시설로 사용합니다. 모든 시나리오는 같은 한반도 맵을 사용하며 이전 동아시아 저장은 명확히 거부합니다. [좌표계·호환 방식·검증 결과](docs/HEX-GRID.md)를 참고하세요.
 
 | 항목 | 구현 |
 |---|---|
 | 진영 | 대한민국 플레이어 / 북한 AI |
-| 지도 | 240열 × 480행, 115,200개 헥스 |
-| 지리 범위 | 동경 118–147도, 북위 24–46도. 오키나와와 홋카이도 포함 |
-| 플레이 가능 영역 | 남·북한 육지와 지도 내 해역. 외국 육지는 표시 전용 |
+| 지도 | 72열 × 126행, 9,072개 헥스 |
+| 지리 범위 | korea-map의 한반도·제주·부속도서 마스크 |
+| 플레이 가능 영역 | 남한 육지 blue / 북한 육지 red / 바다 neutral |
 | 지상 | 보병·기계화·기갑, 포병·방공여단, 전선 보급대; 공개 육군 편제가 기본 |
 | 공중 | 전투비행단의 공중 방어·광역 정찰·지상 지원·전투 출격 |
 | 해상 | 해군전단 전투, 수송선단 승선·하선·물자 전달 |
 | 정보 영역 | 통신 장애, 통신 방어, 정찰 가시성 |
-| 기반시설 | 가상 전력·통신·항만·철도·도로·공항·에너지 거점 42곳 |
+| 기반시설 | 도시 8곳·항만 15곳·역 35곳 + 가상 지원시설 30곳 |
 | 시설 피해 | 0–100% 가동률과 부분 복구. 이동·보급·출격·지휘점에 영향 |
 | 보급 | 통제 지역의 경로 탐색, 지형·도로 피해·철도·전력·연료 효율, 적재량이 있는 보급대 |
 | 전투 | 공격/방어 비율과 6면체 주사위, 지형·방어 태세·지원·보급 페널티 |
@@ -38,13 +38,13 @@
 
 Android 8.0(API 26) 이상에서 설치하는 앱입니다. Android System WebView를 최신 상태로 유지하세요. 앱은 실행에 네트워크를 요구하지 않으며 인터넷 권한·위치 권한·광범위한 저장소 권한을 선언하지 않습니다.
 
-1. 제공된 `peninsula-2026-debug.apk` 또는 GitHub Actions의 `app-debug.apk`를 기기로 내려받습니다.
+1. main의 GitHub Actions에서 생성된 `app-debug.apk`를 기기로 내려받습니다.
 2. 파일을 열고 Android 설치 화면을 진행합니다. 해당 다운로드 앱의 외부 APK 설치 허용이 필요할 수 있습니다.
 3. 시작 안내의 **작전 시작**을 누릅니다.
 
 디버그 서명 APK는 직접 설치·테스트용입니다. Google Play 게시용으로는 소유자의 서명 키를 사용해 별도 릴리스를 빌드해야 합니다. 새 디버그 키로 빌드한 APK가 기존 설치에 업데이트되지 않을 때는 먼저 게임 저장 JSON을 내보내고 기존 앱을 삭제한 뒤 설치하세요.
 
-소스의 `dist/peninsula-2026-v3.html`은 단일 파일 오프라인 동반 버전입니다. 데스크톱 브라우저에서 직접 열어 플레이할 수 있습니다. 브라우저와 APK의 저장 공간은 별개이며 JSON으로 진행을 옮길 수 있습니다.
+소스의 `dist/peninsula-2026-v4.html`은 단일 파일 오프라인 동반 버전입니다. 데스크톱 브라우저에서 직접 열어 플레이할 수 있습니다. 브라우저와 APK의 저장 공간은 별개이며 JSON으로 진행을 옮길 수 있습니다.
 
 ## 조작
 
@@ -71,7 +71,7 @@ Android 8.0(API 26) 이상에서 설치하는 앱입니다. Android System WebVi
 필요 환경: JDK 17, Android SDK Platform 35 / Build Tools 35.0.0, Gradle 8.11.1, Node.js 22 이상. Android Gradle Plugin은 8.9.2입니다.
 
 ```sh
-python3 tools/build-army-data.py
+npm run build:map
 npm test
 python3 tools/build-standalone.py
 ./gradlew assembleDebug lintDebug
@@ -100,7 +100,7 @@ docs/                     설계, 출처, 검증 기록
 ## 자료 출처 및 한계
 
 - [Natural Earth 1:50m 지도](https://www.naturalearthdata.com/downloads/50m-cultural-vectors/50m-admin-0-countries/)를 [world-atlas 2.0.2](https://github.com/topojson/world-atlas) 형식으로 사용합니다. 지리 데이터는 public domain이며 정치적·법적 경계 판단용이 아닙니다.
-- 작은 한국 부속도서는 타일 해상도에서 보이도록 일부를 한 헥스로 보강했습니다. 해안선과 격자는 완전히 일치하지 않으며, 지도 범위를 고정 격자에 맞추기 위해 헥스는 가로로 넓게 표시됩니다.
+- 육지·바다는 [korea-map](https://github.com/kingarthurhkm-oss/korea-map)의 마스크와 완전히 일치합니다. 정육각형 odd-r 격자이며 PNG는 검증에만 사용했습니다. Natural Earth는 남북 통제 구분에만 사용합니다. 목포역 해상 노드와 KTX 3개 sequence 간격의 처리 근거는 [지도 문서](docs/HEX-GRID.md)에 있습니다.
 - 한글 글꼴은 Noto Sans KR의 Korean subset을 오프라인 번들로 포함합니다. SIL Open Font License 고지는 `app/src/main/assets/game/fonts/OFL.txt`에 있습니다.
 - [milsymbol](https://github.com/spatialillusions/milsymbol) 3.0.3의 APP6 모드로 14개 SVG를 생성했습니다. `docs/symbols.json`에 SIDC와 제대 정보를 기록했습니다. 사단은 XX, 방공여단은 X를 표시합니다. 항공·함정 기호는 비행단·전단 단위의 게임 카운터로 묶어 사용하며, 전체 APP-6 표준을 구현하지는 않습니다. MIT 고지는 `docs/milsymbol-LICENSE.txt`에 포함합니다.
 - [Android의 앱 내부 콘텐츠 안내](https://developer.android.com/develop/ui/views/layout/webapps/load-local-content)를 참고해 고정 HTTPS origin의 앱 내 파일만 제공하고 외부 요청을 차단합니다.
@@ -110,8 +110,8 @@ docs/                     설계, 출처, 검증 기록
 
 ### HTML 배포 버전
 
-현재 실행 파일은 `peninsula-2026-v3.html`입니다. 다음 배포는 `package.json`의 `htmlRelease`와 화면 제목을 v4, v5 순서로 올립니다. `npm run standalone`은 dist와 downloads에 같은 파일을 생성하고 구형 무버전 HTML을 제거합니다. `npm test`는 생성된 HTML 안의 실제 게임 보드와 기본 육군 편제를 검사합니다.
+현재 실행 파일은 `peninsula-2026-v4.html`입니다. 다음 배포는 `package.json`의 `htmlRelease`와 화면 제목을 v5, v6 순서로 올립니다. `npm run standalone`은 dist와 downloads에 같은 파일을 생성하고 구형 무버전 HTML을 제거합니다. `npm test`는 생성된 HTML 안의 실제 게임 보드와 기본 육군 편제를 검사합니다.
 
-## 전투지경선 (v3)
+## 전투지경선 (v4)
 
-사단 선택 → **전투지경선 지정 / 해제**로 여러 아군 타일을 책임 전선으로 지정할 수 있습니다. 사단 기호는 HQ, 전투력은 타일별 배치와 예비로 분리됩니다. **±**로 배분하고 **HQ·지경선 전체 보기**로 확인하세요. 기존 저장과 미지정 사단은 기존 방식으로 동작합니다. [구조·전투 규칙·검증·후속 범위](docs/COMBAT-SECTORS.md)를 참고하세요.
+사단 선택 → **전투지경선 지정 / 해제**로 여러 아군 타일을 책임 전선으로 지정할 수 있습니다. 사단 기호는 HQ, 전투력은 타일별 배치와 예비로 분리됩니다. **±**로 배분하고 **HQ·지경선 전체 보기**로 확인하세요. 현재 한반도 저장과 미지정 사단은 기존 전투 규칙으로 동작합니다. [구조·전투 규칙·검증·후속 범위](docs/COMBAT-SECTORS.md)를 참고하세요.

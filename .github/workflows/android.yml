@@ -3,7 +3,7 @@ name: Android game build
 on:
   push:
     branches:
-      - codex/peninsula-development
+      - main
   pull_request:
   workflow_dispatch:
 

@@ -63,12 +63,12 @@ test('sector draft commits once, cancellation preserves shares, no-op confirm pr
  q.click({mode:'sector'});q.tile(tiles[0]);q.click({action:'sector-confirm'});assert.equal(q.unit.sector.allocations.length,1);assert.equal(q.unit.sector.allocations[0].tile,tiles[1]);
  assert.equal(q.unit.sector.reserveShare,.2);assert.equal(q.run('mode'),'move');
  q.click({mode:'sector'});q.tile(tiles[0]);q.click({action:'sector-confirm'});assert.equal(q.unit.sector.allocations.length,2);
- const restored=new Game();restored.import(q.saved.get('peninsula-autosave-v1'));assert.equal(JSON.stringify(restored.unit(q.unit.id).sector),JSON.stringify(q.unit.sector));
+ const restored=new Game();restored.import(q.saved.get('peninsula-autosave-korea-v1'));assert.equal(JSON.stringify(restored.unit(q.unit.id).sector),JSON.stringify(q.unit.sector));
 });
 
 test('sector candidate display shares validation with the command, and editor blocks navigation/turn',()=>{
  const q=ui();q.hit(q.unit.id);q.click({mode:'sector'});
- const foreign=q.game.board.tiles.find(t=>t.foreign).id;assert.equal(q.run(`sectorCandidates.has(${foreign})`),false);
+ const foreign=q.game.board.tiles.find(t=>t.sea&&!t.railBridge).id;assert.equal(q.run(`sectorCandidates.has(${foreign})`),false);
  const before=q.game.export();q.tile(foreign);assert.equal(q.game.export(),before);q.click({tab:'forces'});assert.equal(q.run('mode'),'sector');assert.equal(q.node('end-turn').disabled,true);
 });
 
@@ -76,7 +76,7 @@ test('detail close, wait and empty map preserve a predictable selection state',(
  const q=ui();q.hit(q.unit.id);q.hit(q.unit.id);assert.equal(q.run('mode'),'detail');assert.equal(q.node('sidebar').hidden,false);
  const before=q.game.export();q.run('hitUnits=[]');q.tile(q.game.board.links[q.unit.tile][0]);assert.equal(q.game.export(),before);
  q.click({action:'close-panel'});assert.equal(q.run('mode'),'move');q.click({action:'wait'});assert.equal(q.run('selected'),null);assert.equal(q.game.export(),before);
- q.hit(q.unit.id);q.run('hitUnits=[]');q.tile(q.game.board.tiles.find(t=>t.foreign).id);assert.equal(q.run('selected'),null);
+ q.hit(q.unit.id);q.run('hitUnits=[]');q.tile(q.game.board.tiles.find(t=>t.sea&&!t.railBridge).id);assert.equal(q.run('selected'),null);
 });
 
 test('drag, pinch and canceled pointers never issue a tile command',()=>{

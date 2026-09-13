@@ -3,7 +3,7 @@ name: Deploy GitHub Pages
 on:
   push:
     branches:
-      - codex/peninsula-development
+      - main
   workflow_dispatch:
 
 permissions:

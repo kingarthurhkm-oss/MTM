@@ -1,0 +1,19 @@
+{
+  "repository": "kingarthurhkm-oss/korea-map",
+  "commit": "c9f348232d6e5ed918cf2b37f5c8fcf4be998f55",
+  "normalization": "UTF-8 with LF line endings; all data values preserved",
+  "files": {
+    "korea_72x126_mask.txt": {
+      "gitBlob": "0cc1c1a1e45184835fe9163575f4a99178d75796"
+    },
+    "korea_72x126_cities_ports_adjacent_sea.csv": {
+      "gitBlob": "ae2a0f87b5bfdd281a8c207695fcf0e7c4e49e62"
+    },
+    "korea_72x126_ktx_hex_paths.csv": {
+      "gitBlob": "5143878dae11c69a18c582cbe20f35c74fa23ef6"
+    },
+    "korea_72x126_ktx_stations.csv": {
+      "gitBlob": "32e66c6c657d5ad0d34ecf929a6ac1e99e2e66ce"
+    }
+  }
+}

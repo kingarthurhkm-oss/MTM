@@ -2,15 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Game, Board, TYPES} from '../app/src/main/assets/game/engine.js';
 
-test('115,200 cells have symmetric six-way adjacency and cover both bounding islands',()=>{
- const b=new Board();assert.equal(b.cols,240);assert.equal(b.rows,480);assert.equal(b.tiles.length,115200);
+test('9,072 cells have symmetric six-way adjacency and cover the peninsula',()=>{
+ const b=new Board();assert.equal(b.cols,72);assert.equal(b.rows,126);assert.equal(b.tiles.length,9072);
  for(const t of b.tiles){assert.ok(b.links[t.id].length<=6);for(const n of b.links[t.id]){assert.ok(b.links[n].includes(t.id));assert.equal(b.distance(t.id,n),1);}}
- for(const [lon,lat] of [[127.7,26.3],[142.5,43.3]]){const p=b.project(lon,lat);assert.ok(p.x>0&&p.x<b.width&&p.y>0&&p.y<b.height);}
- assert.equal(b.nearest(128,35.5).home,1);assert.equal(b.nearest(126,39).home,2);assert.equal(b.nearest(142.5,43.3).home,3);
+ for(const [lon,lat] of [[126.53,33.5],[129.78,41.8]]){const p=b.project(lon,lat);assert.ok(p.x>0&&p.x<b.width&&p.y>0&&p.y<b.height);}
+ assert.equal(b.nearest(128,35.5).home,1);assert.equal(b.nearest(126,39).home,2);assert.ok(b.tiles.every(t=>!t.foreign));
 });
 test('foreign territory, water and domain restrictions are enforced by engine',()=>{
  const g=new Game(),army=g.alive('blue').find(u=>u.type==='army'),ship=g.alive('blue').find(u=>u.type==='navy');
- const foreign=g.board.tiles.find(t=>t.foreign),sea=g.board.tiles.find(t=>t.sea),land=g.board.tiles.find(t=>t.home===1);
+ const foreign={id:-1},sea=g.board.tiles.find(t=>t.sea),land=g.board.tiles.find(t=>t.home===1);
  assert.equal(g.move(army.id,foreign.id).ok,false);assert.equal(g.move(ship.id,foreign.id).ok,false);
  assert.equal(g.move(army.id,sea.id).ok,false);assert.equal(g.move(ship.id,land.id).ok,false);
  for(const [id] of g.reachable(army)){assert.equal(g.board.tiles[id].sea,false);assert.equal(g.board.tiles[id].foreign,false);}
@@ -30,7 +30,7 @@ test('damaged roads, energy and supply create movement and combat penalties',()=
 });
 test('destroyed logistics cut the supply field and repairs consume finite resources',()=>{
  const g=new Game(),u=g.alive('blue').find(u=>u.type==='army');assert.ok(g.supplyQuality(u)>0);
- for(const s of g.state.sites.filter(s=>s.home==='blue'&&['port','rail'].includes(s.kind)))s.health=0;
+ for(const s of g.state.sites.filter(s=>s.home==='blue'&&['city','port','rail'].includes(s.kind)))s.health=0;
  for(const s of g.alive('blue').filter(u=>u.type==='supply'))s.cargo=0;
  g.refreshSupply();assert.equal(g.supplyQuality(u),0);
  const site=g.state.sites.find(s=>s.home==='blue'&&s.kind==='rail'),cp=g.state.cp,materials=g.state.materials;
@@ -74,7 +74,7 @@ test('national policies cost points and each can be used once per turn',()=>{
 test('saved seed reproduces future turns and malformed imports are atomic',()=>{
  const a=new Game(77),b=new Game(99);a.policy('shelter');b.import(a.export());
  a.endTurn();b.endTurn();assert.equal(a.export(),b.export());
- const before=b.export(),bad=JSON.parse(before);bad.control[b.board.tiles.find(t=>t.foreign).id]=1;
+ const before=b.export(),bad=JSON.parse(before);bad.control[b.board.tiles.find(t=>t.sea).id]=1;
  assert.throws(()=>b.import(JSON.stringify(bad)));assert.equal(b.export(),before);
  const duplicate=JSON.parse(before);duplicate.units[0]=duplicate.units[1];assert.throws(()=>b.import(JSON.stringify(duplicate)));assert.equal(b.export(),before);
  const nan=JSON.parse(before);nan.units[0].hp=null;assert.throws(()=>b.import(JSON.stringify(nan)));

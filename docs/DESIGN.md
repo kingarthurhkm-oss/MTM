@@ -6,7 +6,7 @@
 
 ## 지도와 좌표
 
-240열 × 480행의 odd-q offset 헥스입니다. 큐브 좌표로 인접성과 거리를 계산합니다. 경로는 우선순위 큐를 사용한 Dijkstra 탐색입니다. 지도는 동경 118–147, 북위 24–46을 Mercator 좌표로 투영합니다. 렌더링은 단일 Canvas, 캐시한 지형 이미지, 가시 영역 타일과 부대만 사용합니다. 저장 데이터에는 실제 경위도 기반 군사 배치가 없습니다.
+72열 × 126행 odd-r offset 헥스입니다. row/col은 입력과 타일 ID, axial은 모든 기하·인접·거리·클릭 판정에 사용합니다. 마스크와 CSV를 오프라인으로 컴파일한 metadata가 유일한 지도입니다. 경로는 Dijkstra 탐색이며 KTX railEdges는 이동과 보급 비용에 적용됩니다. [좌표와 원본 예외](HEX-GRID.md).
 
 ## 기반시설 연계
 
@@ -24,7 +24,7 @@
 
 ## 공급
 
-통제 중인 가동 항만·철도와 적재 물자가 있는 보급대에서 육상 공급 필드를 계산합니다. 적 통제 지역과 외국 영토, 바다는 육상 보급 경로에서 제외합니다. 도로 손상, 산악, 연료·전력·철도 효율은 경로 비용을 증가시킵니다. 부대 보급은 턴마다 `공급 연결도 × 32 − 18`만큼 바뀝니다. 부족하면 전투력·이동력이 하락하고 추가 전력 손실이 발생합니다. 수송 물자는 유한 적재량입니다.
+통제 중인 가동 도시·항만·철도와 적재 물자가 있는 보급대에서 육상 공급 필드를 계산합니다. 적 통제 지역과 바다는 육상 보급 경로에서 제외하며 원본 목포역의 철도 연결 노드만 rail edge를 통해 접근합니다. 도로 손상, 산악, 연료·전력·철도 효율은 경로 비용을 증가시킵니다. 부대 보급은 턴마다 `공급 연결도 × 32 − 18`만큼 바뀝니다. 부족하면 전투력·이동력이 하락하고 추가 전력 손실이 발생합니다. 수송 물자는 유한 적재량입니다.
 
 공급은 게임용 단순화입니다. 각 시설의 실제 처리량이나 국가 물류망은 반영하지 않으며, 각 통제 거점이 공급원으로 작동합니다. 공격 경로 최적화나 현실 보급량 환산을 제공하지 않습니다.
 
@@ -45,10 +45,6 @@ Android는 API 26 이상을 대상으로 하고, 고정 `appassets.androidplatfo
 멀티플레이, 대규모 캠페인 편집기, 오디오, 접근성용 지도 대체 이동 UI, 게임패드, Google Play 배포, 실제 기기 성능 계측은 이 버전의 범위에 포함되지 않습니다. 현실 군사·시설 데이터로 게임 수치를 대체하는 기능도 제공하지 않습니다.
 
 
-## Map resolution update
+## 지도 재생성
 
-The grid is 240 × 480 (115,200 cells), resampled from the existing country polygons without changing the geographic extent. The contiguous Korean land span near latitude 38° is at least 20 tiles wide. Municipal Army anchors are mapped from their previous representative game positions to the nearest South Korean land tile; `legacyHex` retains the original 120 × 240 anchor for save validation. Procedural forces, facilities and objectives are generated on the new grid. Movement and attack ranges remain expressed in tiles.
-
-Save format v2 imports v1 by validating on the retained 120 × 240 mask first, then converting unit positions and territorial control. Facilities and objectives map by stable ID; aircraft at facilities, ships at ports and embarked passengers retain their relationships. Turn, resources, unit health and supply remain unchanged. The importer validates the converted save before replacing the active state.
-
-Run `python3 tools/build-geography.py` to rebuild offline from bundled polygons, `python3 tools/build-army-data.py` after editing the catalog, `npm test`, and `npm run standalone`. Map-specific regression tests include original v1 fixtures for both scenarios.
+`npm run build:map` → `npm test` → `npm run standalone`. 저장 버전 3과 mapId를 함께 검증하며 이전 지도 저장은 재투영하지 않고 거부합니다. 시군 대표점은 region_id와 원본 도시·역 또는 대략적 행정지역 중심으로 다시 생성하고 빈 아군 육지로 분산합니다.

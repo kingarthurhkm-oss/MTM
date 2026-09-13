@@ -1,12 +1,12 @@
-// Flat-top regular hexagons. Axial directions also define edge indices:
-// 0 north, 1 south, 2 northwest, 3 southwest, 4 northeast, 5 southeast.
-// Preserve this order: legacy scenario placement uses ordered neighbors.
+// Pointy-top odd-r rows, matching overlay_places_on_ktx.py exactly.
+// Axial directions: NW, SE, W, SW, NE, E. Opposites: 1,0,5,4,3,2.
 export const HEX_DIRECTIONS = [[0,-1],[0,1],[-1,0],[-1,1],[1,-1],[1,0]];
-const HEX_EDGE_CORNERS = [[1,2],[4,5],[0,1],[5,0],[2,3],[3,4]];
-const HEX_CORNERS = [[-1,0],[-.5,-Math.sqrt(3)/2],[.5,-Math.sqrt(3)/2],[1,0],[.5,Math.sqrt(3)/2],[-.5,Math.sqrt(3)/2]];
+const HEX_EDGE_CORNERS = [[3,4],[0,1],[2,3],[1,2],[4,5],[5,0]];
+const HEX_CORNERS = Array.from({length:6},(_,i)=>[Math.cos((30+60*i)*Math.PI/180),Math.sin((30+60*i)*Math.PI/180)]);
 
-export const offsetToAxial = (col,row) => ({q:col,r:row-Math.floor(col/2)});
-export const axialToOffset = ({q,r}) => ({q,r:r+Math.floor(q/2)});
+export const offsetToAxial = (col,row) => ({q:col-Math.floor(row/2),r:row});
+// q/r on tiles remain named offset fields for the existing UI; axial is explicit.
+export const axialToOffset = ({q,r}) => ({q:q+Math.floor(r/2),r});
 export const hexDistance = (a,b) => Math.max(Math.abs(a.q-b.q),Math.abs(a.r-b.r),Math.abs(a.q+a.r-b.q-b.r));
 export function roundAxial(q,r){
   let x=Math.round(q),z=Math.round(r),y=Math.round(-q-r);
@@ -16,10 +16,10 @@ export function roundAxial(q,r){
 }
 
 export class HexLayout {
-  constructor(radius){this.radius=radius;this.dx=1.5*radius;this.dy=Math.sqrt(3)*radius;}
-  toWorld({q,r}){return {x:this.radius+this.dx*q,y:this.dy/2+this.dy*(r+q/2)};}
-  fromWorld(x,y){x-=this.radius;y-=this.dy/2;return roundAxial(2*x/(3*this.radius),(-x/3+y/Math.sqrt(3))/this.radius);}
-  bounds(cols,rows){return {width:(cols-1)*this.dx+2*this.radius,height:(rows+.5)*this.dy};}
+  constructor(radius){this.radius=radius;this.dx=Math.sqrt(3)*radius;this.dy=1.5*radius;}
+  toWorld({q,r}){return {x:this.dx/2+this.dx*(q+r/2),y:this.radius+this.dy*r};}
+  fromWorld(x,y){x-=this.dx/2;y-=this.radius;return roundAxial((x/Math.sqrt(3)-y/3)/this.radius,2*y/(3*this.radius));}
+  bounds(cols,rows){return {width:(cols+(rows>1?.5:0))*this.dx,height:(rows-1)*this.dy+2*this.radius};}
   corners(center,scale=1){return HEX_CORNERS.map(([x,y])=>({x:center.x+x*this.radius*scale,y:center.y+y*this.radius*scale}));}
   edge(center,direction){const c=this.corners(center);return HEX_EDGE_CORNERS[direction].map(i=>c[i]);}
   path(context,center,scale=1){context.beginPath();this.corners(center,scale).forEach((p,i)=>i?context.lineTo(p.x,p.y):context.moveTo(p.x,p.y));context.closePath();}

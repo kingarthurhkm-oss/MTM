@@ -1,3 +1,5 @@
+> 이전 버전의 검증 기록입니다. 현재 Korea Board 검증은 [KOREA-VALIDATION.md](KOREA-VALIDATION.md)를 보세요.
+
 # 공개 육군 확장 검증 기록
 
 검증일: 2026-09-12. `VALIDATION.md`는 기존 기본 버전의 기록으로 보존하며, 이 문서는 육군 확장 변경분의 결과다.

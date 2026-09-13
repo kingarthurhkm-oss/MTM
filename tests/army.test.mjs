@@ -10,7 +10,7 @@ test('public catalog loads every playable formation on a land municipality ancho
   assert.equal(new Set(formations.map(u=>u.formationId)).size,55);
   for(const u of formations){
     const f=armyFormation(u.formationId);
-    assert.ok(f.deployable);assert.equal(u.name,f.unit_name);assert.equal(u.tile,armyTile(g.board,f));
+    assert.ok(f.deployable);assert.equal(u.name,f.unit_name);assert.ok(g.board.distance(u.tile,armyTile(g.board,f))<=4);
     assert.equal(g.board.tiles[u.tile].home,1);assert.equal(u.ap,g.spec(u).mp);
   }
   assert.equal(armyFormation('div-28'),null);
@@ -81,11 +81,11 @@ test('forged references, statistics, duplicate units and unsupported catalog ver
   assert.throws(()=>g.newGame(3,'unknown'));assert.equal(g.export(),before);
 });
 
-test('municipal stacking survives movement and save restore while current positions stay separate from starting regions',()=>{
+test('municipal formations disperse and moving one preserves the other and the region anchor',()=>{
   const g=new Game(10,ARMY_SCENARIO),first=g.state.units.find(u=>u.formationId==='div-7'),second=g.state.units.find(u=>u.formationId==='div-15');
-  assert.equal(first.tile,second.tile);assert.ok(g.at(first.tile).length>=2);
-  const origin=first.tile,to=[...g.reachable(first).keys()].find(t=>t!==origin);
-  assert.ok(g.move(first.id,to).ok);assert.equal(second.tile,origin);
-  assert.equal(armyTile(g.board,g.formation(first)),origin);
-  const loaded=new Game();loaded.import(g.export());assert.equal(loaded.unit(first.id).tile,to);assert.equal(loaded.unit(second.id).tile,origin);
+  assert.notEqual(first.tile,second.tile);assert.equal(g.at(first.tile).length,1);
+  const origin=first.tile,other=second.tile,anchor=armyTile(g.board,g.formation(first)),to=[...g.reachable(first).keys()].find(t=>t!==origin);
+  assert.ok(g.move(first.id,to).ok);assert.equal(second.tile,other);
+  assert.equal(armyTile(g.board,g.formation(first)),anchor);
+  const loaded=new Game();loaded.import(g.export());assert.equal(loaded.unit(first.id).tile,to);assert.equal(loaded.unit(second.id).tile,other);
 });

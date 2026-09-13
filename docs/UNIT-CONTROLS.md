@@ -9,7 +9,7 @@ clone하고 해당 브랜치에서 `git pull --ff-only`로 동기화했다.
 
 ## 보존한 구조
 
-- `Board`의 240×480 좌표, `Game.reachable / move / canEnter / moveCost` 그대로 사용.
+- `Board`의 72×126 Korea Board 좌표, `Game.reachable / move / canEnter / moveCost` 그대로 사용.
 - 부대·편제·저장 스키마, 체력·행동력·보급·보급망·턴·AI 유지.
 - 전투 결과표의 계수·주사위·반격·피해·사거리·지경선 제한 유지.
 - 사단의 기존 `unit.sector.allocations`, `reserveShare`, HQ 위치 유지.

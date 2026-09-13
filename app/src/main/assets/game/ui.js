@@ -25,7 +25,7 @@ for(const region of Object.values(ARMY_DATA.regions)){
 const off=document.createElement('canvas');off.width=Math.ceil(game.board.width);off.height=Math.ceil(game.board.height);const oc=off.getContext('2d');
 const state=()=>game.state;
 function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),3500);}
-function autosave(){try{localStorage.setItem('peninsula-autosave-v1',game.export());return true;}catch{return false;}}
+function autosave(){try{localStorage.setItem('peninsula-autosave-korea-v1',game.export());return true;}catch{return false;}}
 function save(){toast(autosave()?'현재 진행을 저장했습니다.':'저장 공간을 사용할 수 없습니다. 메뉴에서 파일로 내보내세요.');}
 function execute(result){if(result.ok){reachable=selected?game.reachable(game.unit(selected)):new Map();autosave();render();}toast(result.message);dirty=true;}
 function baseMap(){
@@ -40,19 +40,22 @@ function drawTileMap(context,tiles){
  context.beginPath();
  for(const coast of game.board.coastlines){const [a,b]=game.board.layout.edge(game.board.tiles[coast.tile],coast.direction);context.moveTo(a.x,a.y);context.lineTo(b.x,b.y);}
  context.strokeStyle='#78999e';context.lineWidth=context===oc?1:1.5/camera.zoom;context.stroke();
- // Existing fictional infrastructure remains visible; future edge data stays empty.
- for(const t of tiles.filter(t=>t.road)){context.strokeStyle=t.home===1?'#80968d65':'#ad938765';context.lineWidth=t.rail?1.9:1;for(const n of game.board.links[t.id])if(game.board.tiles[n].road){context.beginPath();context.moveTo(t.x,t.y);context.lineTo(game.board.tiles[n].x,game.board.tiles[n].y);context.stroke();}}
+ // Draw precisely the same rail edges used by movement and supply.
+ for(const t of tiles){
+  if(t.road){context.strokeStyle=t.home===1?'#80968d65':'#ad938765';context.lineWidth=1;for(const n of game.board.links[t.id])if(game.board.tiles[n].road){context.beginPath();context.moveTo(t.x,t.y);context.lineTo(game.board.tiles[n].x,game.board.tiles[n].y);context.stroke();}}
+  for(const d of t.railEdges){const n=game.board.tiles[game.board.neighbor(t.id,d)];context.strokeStyle='#ddb66e';context.lineWidth=1.8;context.beginPath();context.moveTo(t.x,t.y);context.lineTo(n.x,n.y);context.stroke();}
+ }
 }
 function hex(c,t,k=1){game.board.layout.path(c,t,k);}
 function world(x,y){return screenToWorld({x,y},camera,width,height);}
 function screen(x,y){return worldToScreen({x,y},camera,width,height);}
 function minimapLayout(){const scale=Math.min(mini.width/game.board.width,mini.height/game.board.height);return {scale,x:(mini.width-game.board.width*scale)/2,y:(mini.height-game.board.height*scale)/2};}
 function fit(full=false){
- const a=full?{x:0,y:0}:game.board.project(123.5,43.3),b=full?{x:game.board.width,y:game.board.height}:game.board.project(132,32.2);
- camera.x=(a.x+b.x)/2;camera.y=(a.y+b.y)/2;camera.zoom=Math.min(width/(b.x-a.x),height/(b.y-a.y))*(full?.9:.9);dirty=true;
+ const a={x:0,y:0},b={x:game.board.width,y:game.board.height};
+ camera.x=(a.x+b.x)/2;camera.y=(a.y+b.y)/2;camera.zoom=Math.min(width/(b.x-a.x),height/(b.y-a.y))*game.board.geography.camera.padding;dirty=true;
 }
 function centerTile(id){const t=game.board.tiles[id];camera.x=t.x;camera.y=t.y;camera.zoom=Math.max(camera.zoom,3);dirty=true;}
-function zoom(f,px=width/2,py=height/2){const p=world(px,py);camera.zoom=clamp(camera.zoom*f,.12,6);camera.x=p.x-(px-width/2)/camera.zoom;camera.y=p.y-(py-height/2)/camera.zoom;dirty=true;}
+function zoom(f,px=width/2,py=height/2){const p=world(px,py);camera.zoom=clamp(camera.zoom*f,game.board.geography.camera.minZoom,game.board.geography.camera.maxZoom);camera.x=p.x-(px-width/2)/camera.zoom;camera.y=p.y-(py-height/2)/camera.zoom;dirty=true;}
 function resize(){const r=canvas.getBoundingClientRect();width=r.width;height=r.height;const d=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(width*d);canvas.height=Math.round(height*d);ctx.setTransform(d,0,0,d,0,0);if(first&&width&&height){fit();first=false;}dirty=true;}
 new ResizeObserver(resize).observe($('map-section'));
 function textAt(label,x,y,color,size=11){ctx.font=`${size}px "Noto KR",system-ui,sans-serif`;ctx.textAlign='center';ctx.fillStyle='#07141ad9';ctx.lineWidth=3;ctx.strokeStyle='#0b202a';ctx.strokeText(label,x,y);ctx.fillStyle=color;ctx.fillText(label,x,y);}
@@ -78,9 +81,8 @@ function draw(){
   if(mode==='move'&&selected&&game.active(game.unit(selected)))for(const t of tiles){if(game.canAttackTile(game.unit(selected),t.id)){hex(ctx,t,.86);ctx.strokeStyle='#ee858d';ctx.lineWidth=2/camera.zoom;ctx.stroke();}}
   if(!selected&&selectedTile!==null){const t=game.board.tiles[selectedTile];ctx.strokeStyle='#edbb70';ctx.lineWidth=2/camera.zoom;hex(ctx,t,1.05);ctx.stroke();}
   ctx.restore();
-  const labels=[['대한민국',127.8,35.6,'#a9ccd0'],['북한',127.7,40.5,'#c6a1a3'],['중국 · 진입 불가',122,42,'#78868e'],['일본 · 진입 불가',137.7,36.7,'#78868e'],['홋카이도',143.1,43.35,'#a1adb3'],['오키나와',128.15,26.2,'#a1adb3'],['동 해',132.8,39.1,'#698b9e'],['서 해',123,35.5,'#698b9e']];
-  for(const [label,lon,lat,color]of labels){const p=game.board.project(lon,lat),s=screen(p.x,p.y);if(s.x>0&&s.x<width&&s.y>70&&s.y<height&&!(s.x<250&&s.y<115))textAt(label,s.x,s.y,color,label.length<5?12:10);}
-  for(const [name,lon,lat]of GEOGRAPHY.islands){const p=game.board.project(lon,lat),s=screen(p.x,p.y);if(camera.zoom>.55&&s.x>0&&s.x<width&&s.y>0&&s.y<height)textAt(name,s.x,s.y+13,'#90b0bc',8);}
+  for(const label of GEOGRAPHY.labels){const t=game.board.tiles[game.board.id(label.col,label.row)],p=screen(t.x,t.y);if(p.x>0&&p.x<width&&p.y>70&&p.y<height)textAt(label.text,p.x,p.y,label.color,12);}
+  if(camera.zoom>.4)for(const site of state().sites.filter(s=>s.kind==='city'||s.kind==='port')){const t=game.board.tiles[site.tile];if(!on(t))continue;const p=screen(t.x,t.y);textAt(site.name,p.x,p.y+16,'#c6d4d6',9);}
   for(const obj of state().objectives){const t=game.board.tiles[obj.tile],p=screen(t.x,t.y);ctx.strokeStyle=obj.held?'#9bd5bc':'#efb664';ctx.fillStyle='#16282f';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(p.x,p.y,12,0,Math.PI*2);ctx.fill();ctx.stroke();textAt(obj.id.slice(-1),p.x,p.y+4,obj.held?'#9bd5bc':'#efb664',11);if(camera.zoom>1)textAt(obj.name,p.x,p.y+28,'#d5ba8d',9);}
   if(layer==='infrastructure'||camera.zoom>1.1){for(const site of state().sites){if(!on(game.board.tiles[site.tile]))continue;const t=game.board.tiles[site.tile],p=screen(t.x,t.y);ctx.fillStyle='#132831';ctx.strokeStyle=site.health<60?'#d7867c':'#718e92';ctx.lineWidth=1;ctx.fillRect(p.x-7,p.y-7,14,14);ctx.strokeRect(p.x-7,p.y-7,14,14);textAt(SITE_TYPES[site.kind].mark,p.x,p.y+3,site.health<60?'#dda595':'#b1c4c3',8);}}
   hitUnits=[];const stacks={};
@@ -130,7 +132,7 @@ function mapClick(x,y){
 let pointers=new Map(),dragStart=null,lastPinch=0,moved=false;
 canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===1){dragStart={x:e.offsetX,y:e.offsetY,cx:camera.x,cy:camera.y};moved=false;}else {moved=true;if(pointers.size===2){const p=[...pointers.values()];lastPinch=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);}}});
 canvas.addEventListener('pointermove',e=>{
- const p=world(e.offsetX,e.offsetY),t=game.board.closest(p.x,p.y);if(t>=0)$('coordinate-label').textContent=`HEX ${game.board.tiles[t].axial.q.toString().padStart(3,'0')} · ${game.board.tiles[t].axial.r.toString().padStart(3,'0')}`;
+ const p=world(e.offsetX,e.offsetY),t=game.board.closest(p.x,p.y);if(t>=0)$('coordinate-label').textContent=`HEX ${game.board.tiles[t].r.toString().padStart(3,'0')}-${game.board.tiles[t].q.toString().padStart(2,'0')}`;
  if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
  if(pointers.size===2){const a=[...pointers.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(lastPinch>0)zoom(d/lastPinch,(a[0].x+a[1].x)/2,(a[0].y+a[1].y)/2);lastPinch=d;moved=true;}
  else if(dragStart){const dx=e.offsetX-dragStart.x,dy=e.offsetY-dragStart.y;if(Math.hypot(dx,dy)>7)moved=true;if(moved){camera.x=dragStart.cx-dx/camera.zoom;camera.y=dragStart.cy-dy/camera.zoom;dirty=true;}}
@@ -160,7 +162,7 @@ function renderUnitControls(){
  const u=game.unit(selected),controls=$('unit-controls'),card=$('interaction-card');
  controls.hidden=!u;card.hidden=true;card.innerHTML='';
  if(u){const spec=game.spec(u),stat=(key,label,value)=>`<span class="unit-stat" title="${label}" aria-label="${label} ${value}">${icon(key)}<b>${value}</b></span>`;
-  controls.innerHTML=`<div class="unit-status-bar"><button class="unit-identity" data-action="center" title="지휘 위치로 이동"><img src="${symbolPath(u.side,unitSymbol(u))}" alt="${esc(TYPES[u.type].name)}"><span>${esc(u.name)}${u.sector?'<small>HQ</small>':''}</span></button><div class="unit-stats">${stat('attack','공격력',spec.attack)}${stat('defense','기본 방어력',spec.defense)}${stat('hp','현재/최대 전력',Math.round(u.hp)+'/100')}${stat('move','현재/최대 이동력',Number(u.ap.toFixed(1))+'/'+spec.mp)}${stat('supply','현재/최대 보급',Math.round(u.supply)+'/100')}${stat('eye','탐지',game.reconRadius(u))}${game.board.tiles[u.tile].legacyTerrain==='mountain'?stat('terrain','지형 방어 보너스','+28%'):''}</div><button class="detail-toggle" data-action="details" aria-label="부대 상세 정보" aria-expanded="${mode==='detail'&&panelOpen}">${icon('detail')}</button></div>${mode==='move'?actionButtons(u):''}`;
+  controls.innerHTML=`<div class="unit-status-bar"><button class="unit-identity" data-action="center" title="지휘 위치로 이동"><img src="${symbolPath(u.side,unitSymbol(u))}" alt="${esc(TYPES[u.type].name)}"><span>${esc(u.name)}${u.sector?'<small>HQ</small>':''}</span></button><div class="unit-stats">${stat('attack','공격력',spec.attack)}${stat('defense','기본 방어력',spec.defense)}${stat('hp','현재/최대 전력',Math.round(u.hp)+'/100')}${stat('move','현재/최대 이동력',Number(u.ap.toFixed(1))+'/'+spec.mp)}${stat('supply','현재/최대 보급',Math.round(u.supply)+'/100')}${stat('eye','탐지',game.reconRadius(u))}${game.board.tiles[u.tile].terrain==='mountain'?stat('terrain','지형 방어 보너스','+28%'):''}</div><button class="detail-toggle" data-action="details" aria-label="부대 상세 정보" aria-expanded="${mode==='detail'&&panelOpen}">${icon('detail')}</button></div>${mode==='move'?actionButtons(u):''}`;
  }
  if(mode==='sector'&&u){card.hidden=false;card.innerHTML=`<div class="boundary-editor"><strong>${icon('sector')}전투지경선 편집 <span>${sectorDraft.allocations.length}/64</span></strong><p>점선: 지정 가능 · 실선: 현재 · ✓: 편집 중</p><p>타일 추가·제거 시 전선 80% 균등 / 예비 20%</p><div class="confirm-actions"><button data-action="cancel">취소</button><button data-action="sector-confirm" class="primary">확정</button></div></div>`;}
  if(mode==='unload'){card.hidden=false;card.innerHTML='<div class="boundary-editor"><p>인접한 아군 해안 선택</p><button data-action="cancel">취소</button></div>';}
@@ -239,7 +241,7 @@ function formationDetail(id){
  modal(`<p class="modal-eyebrow">PUBLIC FORMATION</p><h2>${esc(f.unit_name)}</h2>${formationSummary(f)}<p class="modal-copy">${esc(f.notes)}</p><div class="modal-copy"><b>항목별 출처</b><ul>${f.source.map(ref=>{const s=ARMY_DATA.sources[ref.source_id];return `<li><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title)}</a><br>${ref.fields.map(k=>esc(labels[k]||k)).join(' · ')}<br>${s.kind==='official'?'공식':s.kind==='news'?'공개 언론':s.kind==='secondary_mirror'?'나무위키 미러 · 원문 직접 미확인':'공개 위키'} · ${s.published_date?'발행 '+esc(s.published_date)+' · ':''}열람 ${esc(s.checked_at)}</li>`;}).join('')}</ul></div><div class="modal-grid"><button data-modal="army-catalog">편제표</button><button class="primary" data-jump-formation="${f.id}">${state().units.some(u=>u.formationId===f.id&&u.hp>0)?'게임 부대 선택':'대표 권역 보기'}</button><button class="wide" data-modal="close">닫기</button></div>`);
 }
 function startScenario(scenario){game.newGame(2026,scenario);selected=null;selectedSite=null;selectedTile=null;target=null;mode='select';panelOpen=false;sectorDraft=null;targetTile=null;tab='command';filter='all';reachable=new Map();baseMap();autosave();render();fit();closeModal();clearTimeout(toastTimer);$('toast').classList.remove('visible');}
-function briefing(){modal(`<p class="modal-eyebrow">PENINSULA / SCENARIO 01</p><h2>한반도, 2026.</h2><div class="briefing-stats"><div><strong>${game.board.tiles.length.toLocaleString('en-US')}</strong><span>헥스 타일</span></div><div><strong>3</strong><span>작전 영역</span></div><div><strong>45</strong><span>최대 턴</span></div></div><div class="modal-copy"><p>대한민국 진영에서 육·해·공 전력을 지휘하세요. 세 구역을 2턴 동안 확보하면서 민간 보호와 기반시설을 보존하는 것이 목표입니다.</p><p><b>부대 선택 → 이동·공격 → 국가 지휘 명령 → 턴 종료.</b> 지도는 한 손가락으로 이동하고 두 손가락으로 확대할 수 있습니다.</p><p>2026년을 배경으로 한 가상 전략 게임입니다. 기본값은 공개 육군 부대명과 시군 대표 권역을 사용하는 편제입니다. 지원전력·적군·시설·성능·피해 수치는 가상이며 실제 전쟁 예측값이 아닙니다. 턴은 실제 시간과 대응하지 않습니다.</p></div><div class="modal-grid"><button data-modal="help">조작법과 규칙</button><button class="primary wide" data-modal="start">공개 육군 편제로 시작 · 55개 부대 →</button><button data-modal="legacy-start">기존 가상 편제로 시작</button><button data-modal="army-catalog">육군 편제·출처 먼저 보기</button></div>`);}
+function briefing(){modal(`<p class="modal-eyebrow">PENINSULA / SCENARIO 01</p><h2>한반도, 2026.</h2><div class="briefing-stats"><div><strong>${game.board.tiles.length.toLocaleString('en-US')}</strong><span>헥스 타일</span></div><div><strong>3</strong><span>작전 영역</span></div><div><strong>45</strong><span>최대 턴</span></div></div><div class="modal-copy"><p>대한민국 진영에서 육·해·공 전력을 지휘하세요. 세 구역을 2턴 동안 확보하면서 민간 보호와 기반시설을 보존하는 것이 목표입니다.</p><p><b>부대 선택 → 이동·공격 → 국가 지휘 명령 → 턴 종료.</b> 지도는 한 손가락으로 이동하고 두 손가락으로 확대할 수 있습니다.</p><p>2026년을 배경으로 한 가상 전략 게임입니다. 기본값은 공개 육군 부대명과 시군 대표 권역을 사용하는 편제입니다. 지원전력·적군·시설·성능·피해 수치는 가상이며 실제 전쟁 예측값이 아닙니다. 턴은 실제 시간과 대응하지 않습니다.</p></div><div class="modal-grid"><button data-modal="help">조작법과 규칙</button><button class="primary wide" data-modal="start">공개 육군 편제로 시작 · 55개 부대 →</button><button data-modal="legacy-start">가상 편제로 시작 · 한반도 맵</button><button data-modal="army-catalog">육군 편제·출처 먼저 보기</button></div>`);}
 function menu(){modal(`<p class="modal-eyebrow">COMMAND MENU</p><h2>작전 관리</h2><div class="modal-grid"><button data-modal="save">진행 저장</button><button data-modal="restore">자동 저장 불러오기</button><button data-modal="export">저장 파일 내보내기</button><button data-modal="import">저장 파일 가져오기</button><button data-modal="help">조작법 · 규칙 · 범례</button><button data-modal="army-catalog">육군 편제·출처</button><button data-modal="new" class="danger">새 시나리오</button><button class="primary wide" data-modal="close">계속하기</button></div><p class="policy-note">명령 실행 후 자동 저장됩니다. 기기 사이에 옮길 때는 JSON 저장 파일을 사용하세요.</p>`);}
 function help(){modal(`<p class="modal-eyebrow">FIELD MANUAL</p><h2>지휘관 안내</h2><div class="modal-copy"><ol><li>지도 또는 <b>부대</b> 탭에서 아군을 선택합니다.</li><li>아군 선택 즉시 표시되는 <b>청록 헥스</b>를 터치하면 이동합니다. 빈 공간은 선택 해제, 같은 부대를 다시 누르거나 상태 바의 펼치기 버튼을 누르면 상세 정보가 열립니다.</li><li>붉은 ⌖의 적 또는 적 책임 타일을 터치하고 예상 피해를 확인한 뒤 <b>공격 실행</b>을 누릅니다. 취소하면 이동 상태로 돌아갑니다. 전투지경선은 독립 버튼으로 편집하고 확정해야 저장됩니다.</li><li>비행단은 방어·정찰·지원 또는 전투 출격 중 하나를 수행합니다. 방공여단은 주변 시설과 전력을 자동 방어합니다.</li><li>지상부대를 가동률 25% 이상인 아군 항만에 두고 인접 수송선단으로 승선시킵니다. 하선은 인접한 아군 해안에서 가능합니다.</li><li>보급 탭의 청록색은 원활, 황색은 감소, 적색은 단절입니다. 보급대·수송선단은 3헥스 이내 부대에 물자를 전달합니다.</li><li>시설 복구에는 지휘점 2와 자재 12가 필요합니다. 통신은 지휘점, 전력·철도·연료는 보급, 도로는 이동, 공항은 출격 효율에 영향을 줍니다.</li><li>세 목표를 2턴 유지하면 종료됩니다. 민간 보호 70%와 시설 60% 이상이면 보존 목표도 달성합니다. 보호 40% 미만, 시설 30% 미만, 지상전력 상실 또는 45턴 초과 시 실패합니다.</li></ol><p>점수는 보호·시설·전력 보존과 짧은 소요 턴을 합산합니다. 핵 위협은 위기 85 이상에서 발생하는 추상적 재난 이벤트이며, 실제 무기 효과를 계산하지 않습니다.</p><p>적 부대는 정찰 범위에 들어와야 표시됩니다. 외국 영토와 영공은 플레이할 수 없습니다. 모든 시설 위치와 전력 수치는 가상입니다.</p></div><div class="legend-symbols">${['army','armor','artillery','air','navy','airdefense','transport'].map(t=>`<div><img src="${symbolPath('blue',t)}" alt="${TYPES[t].name}"><span>${TYPES[t].name}</span></div>`).join('')}</div><p class="policy-note">APP-6 기호: 사단 XX · 여단 X. 비행단·전단은 공중·수상 기호와 부대명으로 집계 단위를 표시합니다. 전체 APP-6 표준을 구현한 군용 체계는 아닙니다.<br>해안선: Natural Earth / world-atlas 2.0.2 · 기호: milsymbol 3.0.3 (MIT). 작은 섬은 타일 해상도에 맞춰 확대 표시됩니다.</p><button data-modal="close" class="primary" style="width:100%;margin-top:18px">확인</button>`);}
 function resultModal(){const r=state().result;if(r)modal(`<p class="modal-eyebrow">SCENARIO COMPLETE</p><h2>${esc(r.title)}</h2><p class="modal-copy">${esc(r.detail)}</p><div class="briefing-stats"><div><strong>${r.score.toLocaleString()}</strong><span>종합 점수</span></div><div><strong>${state().turn}</strong><span>소요 턴</span></div><div><strong>${Math.round(state().civilians)}%</strong><span>민간 보호</span></div></div><div class="modal-grid"><button data-modal="close">최종 지도 보기</button><button data-modal="new" class="primary">새 시나리오</button></div>`);}
@@ -285,10 +287,10 @@ document.addEventListener('click',e=>{
   if(d.modal==='reset-army')startScenario(ARMY_SCENARIO);
   if(d.modal==='legacy-start')startScenario('legacy');
   if(d.modal==='save'){save();closeModal();}
-  if(d.modal==='restore'){try{const text=localStorage.getItem('peninsula-autosave-v1');if(text)importSave(text);else toast('저장된 진행이 없습니다.');}catch{toast('저장 공간에 접근하지 못했습니다.');}}
+  if(d.modal==='restore'){try{const text=localStorage.getItem('peninsula-autosave-korea-v1');if(text)importSave(text);else toast('저장된 진행이 없습니다.');}catch{toast('저장 공간에 접근하지 못했습니다.');}}
   if(d.modal==='export')exportSave();
   if(d.modal==='import'){if(window.AndroidFiles)window.AndroidFiles.importSave();else $('import-input').click();}
-  if(d.modal==='new')modal('<p class="modal-eyebrow">NEW SCENARIO</p><h2>새로 시작할까요?</h2><p class="modal-copy">현재 자동 저장은 새 시나리오로 교체됩니다. 보관하려면 먼저 파일로 내보내세요.</p><div class="modal-grid"><button data-modal="close">취소</button><button data-modal="reset" class="primary wide">공개 육군 편제로 새로 시작 · 55개 부대</button><button data-modal="reset-legacy">기존 가상 편제로 시작</button></div>');
+  if(d.modal==='new')modal('<p class="modal-eyebrow">NEW SCENARIO</p><h2>새로 시작할까요?</h2><p class="modal-copy">현재 자동 저장은 새 시나리오로 교체됩니다. 보관하려면 먼저 파일로 내보내세요.</p><div class="modal-grid"><button data-modal="close">취소</button><button data-modal="reset" class="primary wide">공개 육군 편제로 새로 시작 · 55개 부대</button><button data-modal="reset-legacy">가상 편제로 시작 · 한반도 맵</button></div>');
   if(d.modal==='reset')startScenario(ARMY_SCENARIO);
   if(d.modal==='reset-legacy')startScenario('legacy');
  }
@@ -299,7 +301,7 @@ window.receiveNativeSave=importSave;window.saveBeforePause=autosave;window.handl
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('modal').open){e.preventDefault();cancelInteraction();}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)autosave();});
 window.addEventListener('beforeunload',autosave);
-let resumed=false;try{const saved=localStorage.getItem('peninsula-autosave-v1');if(saved){game.import(saved);resumed=true;}}catch{toast('이전 저장을 읽지 못했습니다. 새 시나리오로 시작합니다.');}
+let resumed=false;try{const saved=localStorage.getItem('peninsula-autosave-korea-v1');if(saved){game.import(saved);resumed=true;}}catch{toast('이전 저장을 읽지 못했습니다. 새 시나리오로 시작합니다.');}
 baseMap();render();resize();requestAnimationFrame(draw);if(!resumed)briefing();else toast(`${state().turn}턴 자동 저장을 이어갑니다.`);
 
 document.fonts.ready.then(()=>{dirty=true;});

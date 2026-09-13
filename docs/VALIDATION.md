@@ -1,3 +1,5 @@
+> 이전 버전의 검증 기록입니다. 현재 Korea Board 검증은 [KOREA-VALIDATION.md](KOREA-VALIDATION.md)를 보세요.
+
 # 검증 기록
 
 검증 기준: 2026-09-07 / 버전 0.1.0

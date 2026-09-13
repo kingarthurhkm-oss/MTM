@@ -54,7 +54,7 @@ const server=http.createServer((req,res)=>{
   await page.locator('[data-filter="all"]').click();
   await page.screenshot({path:path.join(out,'android-portrait.png')});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
-  // Public Army scenario: hierarchy, coarse regions, sources, stacks and save migration.
+  // Public Army scenario: hierarchy, coarse regions, sources, dispersed formations and saves.
   await page.setViewportSize({width:412,height:915});
   await page.locator('#menu-button').click();
   await page.locator('[data-modal="new"]').click();
@@ -78,7 +78,7 @@ const server=http.createServer((req,res)=>{
   await page.locator('.command-launcher [data-tab="forces"]').click();
   await page.locator('[data-unit="blue-rok-div-7"]').click();
   await page.locator('[data-action="details"]').click();
-  await page.locator('[data-stack]').click();
+  await page.locator('.command-launcher [data-tab="forces"]').click();
   await page.locator('[data-unit="blue-rok-div-15"]').click();
   assert.match(await page.locator('#unit-controls').innerText(),/15보병사단/);
   await page.locator('#end-turn').click();
@@ -112,6 +112,6 @@ const server=http.createServer((req,res)=>{
   await standalone.waitForFunction(()=>document.getElementById('turn-value').textContent==='02');
   assert.deepEqual(errors,[]);
   fs.writeFileSync(path.join(out,'ui-result.json'),JSON.stringify({passed:true,viewports:['1440x1000','412x915','915x412'],checks:['load','unit selection','movement mode','policy cost','turn resolution','autosave reload','help','air recon','infrastructure panel','theater zoom','portrait layout','landscape layout','standalone offline HTML'],runtimeErrors:errors},null,2));
-  console.log('Browser checks passed: desktop/mobile, legacy and Army saves, hierarchy/sources, stacks, artillery, and offline HTML.');
+  console.log('Browser checks passed: desktop/mobile, legacy and Army saves, hierarchy/sources, dispersed formations, artillery, and offline HTML.');
  }finally{if(browser)await browser.close();server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

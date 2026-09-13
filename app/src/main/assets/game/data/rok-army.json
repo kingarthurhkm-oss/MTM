@@ -7,516 +7,409 @@
   "stats_purpose": "게임 밸런스용 상대 점수. 실제 전투력·준비태세·장비 보유량이 아님.",
   "hierarchy_semantics": "공개 행정 편제를 단순화한 단일 부모 트리. 실시간 작전통제 및 합참·연합사 관계 제외.",
   "map": {
-    "columns": 240,
-    "rows": 480,
-    "layout": "odd-q",
+    "id": "korea-72x126-v1",
+    "columns": 72,
+    "rows": 126,
+    "layout": "odd-r",
     "precision": "city_county_game_region",
-    "basis": "일반 도시 지리의 대략적 위치를 기존 육지 마스크의 대표 헥스로 수동 배정. 군사 위치로부터 계산하지 않음."
+    "basis": "region_id + CSV city/station or approximate municipality representative; nearest South Korean land. No old-grid scaling."
   },
   "regions": {
     "gyeryong": {
       "name": "계룡시",
       "province": "충남",
       "hex": {
-        "q": 77,
-        "r": 228
+        "q": 33,
+        "r": 83
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 38,
-        "r": 114
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:gyeryong"
     },
     "yongin": {
       "name": "용인시",
       "province": "경기",
       "hex": {
-        "q": 77,
-        "r": 208
+        "q": 33,
+        "r": 72
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 38,
-        "r": 104
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:yongin"
     },
     "daegu": {
       "name": "대구광역시",
       "province": "대구",
       "hex": {
-        "q": 89,
-        "r": 236
+        "q": 45,
+        "r": 88
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 44,
-        "r": 118
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "place-daegu"
     },
     "seoul": {
       "name": "서울특별시",
       "province": "서울",
       "hex": {
-        "q": 75,
-        "r": 199
+        "q": 31,
+        "r": 68
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 37,
-        "r": 99
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "place-seoul"
     },
     "icheon": {
       "name": "이천시",
       "province": "경기",
       "hex": {
-        "q": 79,
-        "r": 205
+        "q": 35,
+        "r": 72
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 39,
-        "r": 102
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:icheon"
     },
     "anyang": {
       "name": "안양시",
       "province": "경기",
       "hex": {
-        "q": 75,
-        "r": 203
+        "q": 31,
+        "r": 70
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 37,
-        "r": 101
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:anyang"
     },
     "goyang": {
       "name": "고양시",
       "province": "경기",
       "hex": {
-        "q": 73,
-        "r": 196
+        "q": 29,
+        "r": 67
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 36,
-        "r": 98
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:goyang"
     },
     "chuncheon": {
       "name": "춘천시",
       "province": "강원",
       "hex": {
-        "q": 81,
-        "r": 192
+        "q": 37,
+        "r": 65
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 40,
-        "r": 96
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:chuncheon"
     },
     "inje": {
       "name": "인제군",
       "province": "강원",
       "hex": {
-        "q": 85,
-        "r": 188
+        "q": 41,
+        "r": 63
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 42,
-        "r": 94
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:inje"
     },
     "pocheon": {
       "name": "포천시",
       "province": "경기",
       "hex": {
-        "q": 77,
-        "r": 192
+        "q": 33,
+        "r": 64
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 38,
-        "r": 96
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:pocheon"
     },
     "paju": {
       "name": "파주시",
       "province": "경기",
       "hex": {
-        "q": 73,
-        "r": 194
+        "q": 29,
+        "r": 66
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 36,
-        "r": 97
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:paju"
     },
     "yangju": {
       "name": "양주시",
       "province": "경기",
       "hex": {
-        "q": 75,
-        "r": 195
+        "q": 32,
+        "r": 66
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 37,
-        "r": 97
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:yangju"
     },
     "hwacheon": {
       "name": "화천군",
       "province": "강원",
       "hex": {
-        "q": 81,
-        "r": 188
+        "q": 37,
+        "r": 62
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 40,
-        "r": 94
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:hwacheon"
     },
     "yanggu": {
       "name": "양구군",
       "province": "강원",
       "hex": {
-        "q": 83,
-        "r": 187
+        "q": 40,
+        "r": 62
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 41,
-        "r": 93
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:yanggu"
     },
     "goseong": {
       "name": "고성군",
       "province": "강원",
       "hex": {
-        "q": 86,
-        "r": 183
+        "q": 43,
+        "r": 59
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 43,
-        "r": 91
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:goseong"
     },
     "cheorwon": {
       "name": "철원군",
       "province": "강원",
       "hex": {
-        "q": 77,
-        "r": 186
+        "q": 34,
+        "r": 62
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 38,
-        "r": 93
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:cheorwon"
     },
     "yeoncheon": {
       "name": "연천군",
       "province": "경기",
       "hex": {
-        "q": 75,
-        "r": 187
+        "q": 32,
+        "r": 62
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 37,
-        "r": 93
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:yeoncheon"
     },
     "gapyeong": {
       "name": "가평군",
       "province": "경기",
       "hex": {
-        "q": 79,
-        "r": 195
+        "q": 35,
+        "r": 65
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 39,
-        "r": 97
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:gapyeong"
     },
     "yangpyeong": {
       "name": "양평군",
       "province": "경기",
       "hex": {
-        "q": 79,
-        "r": 201
+        "q": 35,
+        "r": 69
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 39,
-        "r": 100
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:yangpyeong"
     },
     "hongcheon": {
       "name": "홍천군",
       "province": "강원",
       "hex": {
-        "q": 83,
-        "r": 197
+        "q": 38,
+        "r": 67
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 41,
-        "r": 98
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:hongcheon"
     },
     "incheon": {
       "name": "인천광역시",
       "province": "인천",
       "hex": {
-        "q": 73,
-        "r": 202
+        "q": 29,
+        "r": 70
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 36,
-        "r": 101
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "place-incheon"
     },
     "hwaseong": {
       "name": "화성시",
       "province": "경기",
       "hex": {
-        "q": 75,
-        "r": 207
+        "q": 30,
+        "r": 72
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 37,
-        "r": 103
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:hwaseong"
     },
     "wonju": {
       "name": "원주시",
       "province": "강원",
       "hex": {
-        "q": 83,
-        "r": 205
+        "q": 38,
+        "r": 71
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 41,
-        "r": 102
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "station-5"
     },
     "gwangju": {
       "name": "광주광역시",
       "province": "광주권",
       "hex": {
-        "q": 75,
-        "r": 251
+        "q": 30,
+        "r": 96
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음. 광주광역시는 게임의 고정 권역명이며 최신 행정구역 법적 명칭을 나타내지 않음.",
-      "legacyHex": {
-        "q": 37,
-        "r": 125
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "place-gwangju"
     },
     "sejong": {
       "name": "세종특별자치시",
       "province": "세종",
       "hex": {
-        "q": 77,
-        "r": 224
+        "q": 33,
+        "r": 81
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 38,
-        "r": 112
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:sejong"
     },
     "imsil": {
       "name": "임실군",
       "province": "전북",
       "hex": {
-        "q": 77,
-        "r": 242
+        "q": 33,
+        "r": 91
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 38,
-        "r": 121
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:imsil"
     },
     "jeungpyeong": {
       "name": "증평군",
       "province": "충북",
       "hex": {
-        "q": 79,
-        "r": 217
+        "q": 36,
+        "r": 77
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 39,
-        "r": 108
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:jeungpyeong"
     },
     "haman": {
       "name": "함안군",
       "province": "경남",
       "hex": {
-        "q": 87,
-        "r": 249
+        "q": 43,
+        "r": 95
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 43,
-        "r": 124
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:haman"
     },
     "busan": {
       "name": "부산광역시",
       "province": "부산",
       "hex": {
-        "q": 91,
-        "r": 251
+        "q": 50,
+        "r": 96
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 45,
-        "r": 125
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "place-busan"
     },
     "gwangmyeong": {
       "name": "광명시",
       "province": "경기",
       "hex": {
-        "q": 75,
-        "r": 201
+        "q": 30,
+        "r": 70
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 37,
-        "r": 100
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "station-8"
     },
     "namyangju": {
       "name": "남양주시",
       "province": "경기",
       "hex": {
-        "q": 77,
-        "r": 198
+        "q": 33,
+        "r": 68
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 38,
-        "r": 99
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:namyangju"
     },
     "samcheok": {
       "name": "삼척시",
       "province": "강원",
       "hex": {
-        "q": 92,
-        "r": 204
+        "q": 50,
+        "r": 70
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 46,
-        "r": 102
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:samcheok"
     },
     "gimpo": {
       "name": "김포시",
       "province": "경기",
       "hex": {
-        "q": 73,
-        "r": 196
+        "q": 29,
+        "r": 68
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 36,
-        "r": 98
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:gimpo"
     },
     "gwacheon": {
       "name": "과천시",
       "province": "경기",
       "hex": {
-        "q": 75,
-        "r": 203
+        "q": 31,
+        "r": 70
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 37,
-        "r": 101
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:gwacheon"
     },
     "iksan": {
       "name": "익산시",
       "province": "전북",
       "hex": {
-        "q": 75,
-        "r": 235
+        "q": 30,
+        "r": 87
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 37,
-        "r": 117
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "station-15"
     },
     "damyang": {
       "name": "담양군",
       "province": "전남",
       "hex": {
-        "q": 75,
-        "r": 249
+        "q": 31,
+        "r": 94
       },
       "placement": "municipality_representative",
-      "notes": "시·군 또는 광역시 대표 게임 헥스. 행정경계·기지 위치가 아니며 인접 시군과 헥스를 공유할 수 있음.",
-      "legacyHex": {
-        "q": 37,
-        "r": 124
-      }
+      "notes": "새 한반도 맵의 시·군 대표 육지 헥스. 실제 군사 위치가 아니며 부대 중첩은 주변 빈 육지로 분산.",
+      "mapAnchor": "municipality:damyang"
     }
   },
   "stat_profiles": {

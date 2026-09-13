@@ -4,7 +4,7 @@ import { ARMY_DATA, ARMY_SCENARIO, armyFormation, armyTile, armyUnitSpec } from 
 
 import { sectorStrength, sectorOwner, validateSector, applySectorLoss } from './sectors.js';
 
-export const VERSION = 2;
+export const VERSION = 3;
 export const TYPES = {
   army: {name:'보병사단', domain:'land', mp:9, attack:17, defense:16, range:1},
   armor: {name:'기갑사단', domain:'land', mp:12, attack:22, defense:18, range:1},
@@ -16,6 +16,7 @@ export const TYPES = {
   supply: {name:'전선 보급대', domain:'land', mp:10, attack:0, defense:7, range:0}
 };
 export const SITE_TYPES = {
+  city:{name:'도시', mark:'도시', effect:'민간 보호 · 지역 보급 거점'},
   power:{name:'전력', mark:'전', effect:'전력 공급 · 보급 생산'},
   comms:{name:'통신', mark:'통', effect:'지휘점 · 정찰'},
   port:{name:'항만', mark:'항', effect:'해상 수송 · 보급 거점'},
@@ -39,52 +40,76 @@ export class Board {
   constructor(geography=GEOGRAPHY){
     this.geography=geography;
     this.cols=geography.columns;this.rows=geography.rows;
-    this.legacyWidth=2400;
-    this.mercTop=this.merc(46);this.mercBottom=this.merc(24);
-    this.legacyHeight=this.legacyWidth*(this.mercTop-this.mercBottom)/(29*Math.PI/180);
-    this.legacyDx=this.legacyWidth/(this.cols-1);this.legacyDy=this.legacyHeight/(this.rows-.5);
-    this.layout=new HexLayout(this.legacyDx/1.5);
+    if(geography.layout!=='odd-r')throw Error('지원하지 않는 지도 좌표계입니다.');
+    this.layout=new HexLayout(geography.hexRadius);
     this.dx=this.layout.dx;this.dy=this.layout.dy;
     Object.assign(this,this.layout.bounds(this.cols,this.rows));
     const owners=[];const r=geography.ownersRLE;
     for(let i=0;i<r.length;i+=2)for(let j=0;j<r[i+1];j++)owners.push(r[i]);
+    if(owners.length!==this.cols*this.rows||owners.some(v=>![0,1,2].includes(v)))throw Error('지도 마스크가 손상되었습니다.');
     this.tiles=owners.map((home,id)=>{
-      const q=id%this.cols,row=Math.floor(id/this.cols);
-      const rough=(Math.sin(q*2.9+row*.83)+Math.sin(row*.51-q*.77))>.72;
-      // q/r and row-major IDs stay odd-q offset for saves and Army data.
-      // All geometry and graph distance use the explicit axial coordinate.
-      const axial=offsetToAxial(q,row);
-      return {id,q,r:row,axial,home,sea:home===0,foreign:home===3,...tileGeography(home===0?'sea':'land'),
-        legacyTerrain:home===0?'sea':home===3?'foreign':rough?'mountain':'plain',
-        ...this.layout.toWorld(axial),legacyX:q*this.legacyDx,legacyY:(row+(q%2)*.5)*this.legacyDy,
-        road:false,rail:false,roadSite:null};
+      const q=id%this.cols,row=Math.floor(id/this.cols),axial=offsetToAxial(q,row);
+      return {id,q,r:row,axial,home,sea:home===0,foreign:false,...tileGeography(home===0?'sea':'land'),
+        ...this.layout.toWorld(axial),road:false,rail:false,railBridge:false,roadSite:null};
     });
-    this.links=this.tiles.map(t=>{
-      return HEX_DIRECTIONS.map((_,direction)=>this.neighbor(t.id,direction)).filter(i=>i>=0);
-    });
-    this.coastlines=this.tiles.filter(t=>t.domain==='land').flatMap(t=>HEX_DIRECTIONS.flatMap((_,direction)=>{
+    this.links=this.tiles.map(t=>HEX_DIRECTIONS.map((_,direction)=>this.neighbor(t.id,direction)).filter(i=>i>=0));
+    this.coastlines=this.tiles.filter(t=>!t.sea).flatMap(t=>HEX_DIRECTIONS.flatMap((_,direction)=>{
       const n=this.neighbor(t.id,direction);
-      return n>=0&&this.tiles[n].domain==='sea'?[{tile:t.id,neighbor:n,direction}]:[];
+      return n>=0&&this.tiles[n].sea?[{tile:t.id,neighbor:n,direction}]:[];
     }));
+    this.railRoutes=geography.railRoutes.map(route=>{
+      const points=route.points.map(p=>({...p})),path=[points[0].tile],segments=[];
+      for(let i=1;i<points.length;i++){
+        const a=points[i-1].tile,b=points[i].tile;
+        // Preserve every CSV sequence anchor. Some source pairs skip an odd-r neighbor.
+        // Fill only their shortest land connection and record it explicitly.
+        const connection=this.route(a,b,k=>!this.tiles[k].sea||k===b,()=>1,3);
+        if(!connection)throw Error(`철도 경로가 끊어졌습니다: ${route.route_id} ${points[i].sequence}`);
+        segments.push({fromSequence:points[i-1].sequence,toSequence:points[i].sequence,path:connection.path});
+        path.push(...connection.path.slice(1));
+        for(let j=1;j<connection.path.length;j++){
+          const from=connection.path[j-1],to=connection.path[j];
+          for(const [x,y] of [[from,to],[to,from]]){
+            const t=this.tiles[x],direction=HEX_DIRECTIONS.findIndex((_,d)=>this.neighbor(x,d)===y);
+            if(!t.railEdges.includes(direction))t.railEdges.push(direction);
+            t.rail=true;t.railBridge=t.sea;
+          }
+        }
+      }
+      return {...route,points,path,segments};
+    });
+    for(const site of geography.sites){
+      const t=this.tiles[site.tile];
+      if(!t||site.kind!=='rail'&&t.sea)throw Error(`시설 위치 오류: ${site.name}`);
+      if(site.kind==='port'&&!this.links[t.id].some(k=>this.tiles[k].sea))throw Error(`항만 해안 오류: ${site.name}`);
+      if(site.kind==='rail'&&!t.rail)throw Error(`철도망에서 분리된 역: ${site.name}`);
+      if(site.kind==='city')t.urban='high';
+    }
   }
-  merc(lat){return Math.log(Math.tan(Math.PI/4+lat*Math.PI/360));}
-  legacyProject(lon,lat){return {x:(lon-118)/29*this.legacyWidth,y:(this.mercTop-this.merc(lat))/(this.mercTop-this.mercBottom)*this.legacyHeight};}
-  fromLegacy(x,y){return {x:this.layout.radius+x/this.legacyDx*this.dx,y:this.dy/2+y/this.legacyDy*this.dy};}
-  project(lon,lat){const p=this.legacyProject(lon,lat);return this.fromLegacy(p.x,p.y);}
-  id(q,r){return q<0||r<0||q>=this.cols||r>=this.rows?-1:r*this.cols+q;}
+  project(lon,lat){
+    const ref=this.geography.georeference,row=ref.lat[0]*lat+ref.lat[1],x=ref.lon[0]*lon+ref.lon[1];
+    return {x:this.dx/2+x*this.dx,y:this.layout.radius+row*this.dy};
+  }
+  id(q,r){return !Number.isInteger(q)||!Number.isInteger(r)||q<0||r<0||q>=this.cols||r>=this.rows?-1:r*this.cols+q;}
   axialId(axial){const p=axialToOffset(axial);return this.id(p.q,p.r);}
   neighbor(id,direction){const a=this.tiles[id].axial,[q,r]=HEX_DIRECTIONS[direction];return this.axialId({q:a.q+q,r:a.r+r});}
   cube(id){const {q,r}=this.tiles[id].axial;return [q,-q-r,r];}
   distance(a,b){return hexDistance(this.tiles[a].axial,this.tiles[b].axial);}
   closest(x,y){if(!Number.isFinite(x)||!Number.isFinite(y))return -1;return this.axialId(this.layout.fromWorld(x,y));}
-  // Old normalized picking is only for v1 save migration, never pointer input.
-  legacyClosest(x,y){let best=-1,d=Infinity;const col=Math.round(x/this.legacyDx),row=Math.round(y/this.legacyDy);for(let q=col-2;q<=col+2;q++)for(let r=row-2;r<=row+2;r++){const id=this.id(q,r);if(id<0)continue;const t=this.tiles[id],dd=((t.legacyX-x)/this.legacyDx)**2+((t.legacyY-y)/this.legacyDy)**2;if(dd<d){d=dd;best=id;}}return best;}
-  nearest(lon,lat,predicate=()=>true){const p=this.legacyProject(lon,lat);let best=null,d=Infinity;for(const t of this.tiles){if(!predicate(t))continue;const dd=(t.legacyX-p.x)**2+(t.legacyY-p.y)**2;if(dd<d){d=dd;best=t;}}return best;}
-  within(id,radius){const t=this.tiles[id],out=[];for(let q=Math.max(0,t.q-radius);q<=Math.min(this.cols-1,t.q+radius);q++)for(let r=Math.max(0,t.r-radius*2);r<=Math.min(this.rows-1,t.r+radius*2);r++){const k=this.id(q,r);if(this.distance(id,k)<=radius)out.push(k);}return out;}
+  nearest(lon,lat,predicate=()=>true){const p=this.project(lon,lat);return this.nearestWorld(p,predicate);}
+  nearestWorld(p,predicate=()=>true){let best=null,d=Infinity;for(const t of this.tiles){if(!predicate(t))continue;const dd=(t.x-p.x)**2+(t.y-p.y)**2;if(dd<d){d=dd;best=t;}}return best;}
+  within(id,radius){
+    const a=this.tiles[id].axial,out=[];
+    for(let dq=-radius;dq<=radius;dq++)for(let dr=Math.max(-radius,-dq-radius);dr<=Math.min(radius,-dq+radius);dr++){
+      const k=this.axialId({q:a.q+dq,r:a.r+dr});if(k>=0)out.push(k);
+    }return out;
+  }
+  railLinked(from,to){return this.tiles[from].railEdges.some(d=>this.neighbor(from,d)===to);}
   route(start,end,allowed,cost=()=>1,limit=Infinity){
+    if(!this.tiles[start]||!this.tiles[end])return null;
     const heap=new Heap(),dist=new Map([[start,0]]),prev=new Map();heap.push(start,0);
     while(heap.length){const [id,d]=heap.pop();if(d!==dist.get(id))continue;if(id===end){const path=[id];while(path[0]!==start)path.unshift(prev.get(path[0]));return {path,cost:d};}
-      for(const n of this.links[id]){if(!allowed(n))continue;const nd=d+cost(n,id);if(nd>limit||nd>=(dist.get(n)??Infinity))continue;dist.set(n,nd);prev.set(n,id);heap.push(n,nd);}
+      for(const n of this.links[id]){if(!allowed(n,id))continue;const nd=d+cost(n,id);if(nd>limit||nd>=(dist.get(n)??Infinity))continue;dist.set(n,nd);prev.set(n,id);heap.push(n,nd);}
     }return null;
   }
 }
@@ -117,24 +142,28 @@ export class Game {
   reconRadius(unit){const f=this.formation(unit);return f?4+Math.floor(f.reconnaissance/25):unit.type==='air'?12:unit.type==='navy'?7:6;}
   alive(side){return this.state.units.filter(u=>u.hp>0&&(!side||u.side===side));}
   at(id){return this.alive().filter(u=>u.tile===id&&!u.embarked);}
-  owned(t,side){return this.state.control[t]===SIDE[side];}
+  owned(t,side){return this.state.control[t]===SIDE[side]||(this.board.tiles[t]?.railBridge&&this.board.tiles[t].railEdges.some(d=>{const n=this.board.neighbor(t,d);return this.state.control[n]===SIDE[side];}));}
   pick(side,fx,fy,used=new Set(),predicate=()=>true){
     const candidates=this.board.tiles.filter(t=>t.home===SIDE[side]&&predicate(t));
-    const xs=candidates.map(t=>t.legacyX),ys=candidates.map(t=>t.legacyY);
+    const xs=candidates.map(t=>t.x),ys=candidates.map(t=>t.y);
     const x=Math.min(...xs)+(Math.max(...xs)-Math.min(...xs))*fx;
     const y=Math.min(...ys)+(Math.max(...ys)-Math.min(...ys))*fy;
-    return candidates.filter(t=>!used.has(t.id)).sort((a,b)=>(a.legacyX-x)**2+(a.legacyY-y)**2-((b.legacyX-x)**2+(b.legacyY-y)**2))[0];
+    return candidates.filter(t=>!used.has(t.id)).sort((a,b)=>(a.x-x)**2+(a.y-y)**2-((b.x-x)**2+(b.y-y)**2))[0];
   }
   newGame(seed=2026,scenario=ARMY_SCENARIO){
     if(!['legacy',ARMY_SCENARIO].includes(scenario))throw Error('지원하지 않는 시나리오입니다.');
-    this.state={version:this.board.cols===120?1:VERSION,seed:seed>>>0,rng:(seed>>>0)||2026,turn:1,phase:'player',control:this.board.tiles.map(t=>t.home),
+    this.state={version:VERSION,mapId:this.board.geography.id,seed:seed>>>0,rng:(seed>>>0)||2026,turn:1,phase:'player',control:this.board.tiles.map(t=>t.home),
       units:[],sites:[],objectives:[],log:[],cp:9,materials:80,reserve:150,civilians:100,cohesion:100,escalation:18,
       losses:{blue:0,red:0},weather:'맑음',posture:'balanced',policyUsed:[],airCover:0,recon:0,navalCover:0,cyberShield:0,
       lastReport:null,result:null};
-    const used=new Set();
+    for(const site of this.board.geography.sites){
+      const home=this.board.tiles[site.tile].home;
+      this.state.sites.push({...site,home:home===2?'red':'blue',health:100,shelter:0});
+    }
+    const used=new Set(this.state.sites.map(s=>s.tile));
     for(const side of ['blue','red']){
       for(let cluster=0;cluster<3;cluster++){
-        let j=0;for(const kind of Object.keys(SITE_TYPES)){
+        let j=0;for(const kind of Object.keys(SITE_TYPES).filter(k=>!['city','port','rail'].includes(k))){
           const fy=.22+cluster*.29+(j%3)*.055,fx=.25+(j%3)*.24;
           const coast=t=>this.board.links[t.id].some(i=>this.board.tiles[i].sea);
           const t=this.pick(side,fx,fy,used,kind==='port'?coast:()=>true);
@@ -161,7 +190,7 @@ export class Game {
         this.addUnit(side,'air',site.tile,i+1);
       }
       for(let i=0;i<2;i++){
-        const p=this.state.sites.find(s=>s.home===side&&s.kind==='port'&&s.id.endsWith(`-${i+1}`));
+        const p=this.state.sites.filter(s=>s.home===side&&s.kind==='port')[i];
         const sea=this.board.links[p.tile].filter(t=>this.board.tiles[t].sea);
         this.addUnit(side,'navy',sea[0],i+1);
         if(side==='blue')this.addUnit(side,'transport',sea[sea.length-1],i+1);
@@ -180,11 +209,23 @@ export class Game {
       this.state.scenario=ARMY_SCENARIO;this.state.datasetVersion=ARMY_DATA.dataset_version;
       // Replace only the fictional blue combat formations; all legacy support systems remain.
       this.state.units=this.state.units.filter(u=>u.side!=='blue'||!['army','armor','airdefense'].includes(u.type));
+      const occupied=new Set(this.state.units.map(u=>u.tile));
       for(const formation of ARMY_DATA.units.filter(f=>f.deployable)){
-        this.addUnit('blue',formation.game_type,armyTile(this.board,formation),formation.id);
+        const tile=armyTile(this.board,formation,occupied);occupied.add(tile);
+        this.addUnit('blue',formation.game_type,tile,formation.id);
         const unit=this.state.units.at(-1);
         unit.id=`blue-rok-${formation.id}`;unit.name=formation.unit_name;unit.formationId=formation.id;unit.ap=this.spec(unit).mp;
       }
+    }
+    // Disperse any remaining support/naval overlaps deterministically on the proper domain.
+    const occupied=new Set();
+    for(const u of this.state.units.slice().sort((a,b)=>Number(b.type==='transport')-Number(a.type==='transport'))){
+      if(occupied.has(u.tile)){
+        const origin=this.board.tiles[u.tile],sea=TYPES[u.type].domain==='sea';
+        const t=this.board.nearestWorld(origin,t=>!occupied.has(t.id)&&(sea?t.sea:t.home===SIDE[u.side]));
+        if(!t)throw Error('부대를 배치할 빈 타일이 없습니다.');u.tile=t.id;
+      }
+      occupied.add(u.tile);
     }
     this.rebuildRoads();this.refreshSupply();
     this.log('가상 시나리오 시작. 구역 3곳을 2턴 유지하고 민간 보호와 기반시설을 보존하세요.');
@@ -196,13 +237,13 @@ export class Game {
       entrenched:false,acted:false,mission:null,cargo:['supply','transport'].includes(type)?60:0,embarked:null,passenger:null});
   }
   rebuildRoads(){
-    for(const t of this.board.tiles){t.road=false;t.rail=false;t.roadSite=null;}
+    for(const t of this.board.tiles){t.road=false;t.roadSite=null;t.roadEdges=[];}
     for(const side of ['blue','red']){
-      const sites=this.state.sites.filter(s=>s.home===side),roads=sites.filter(s=>s.kind==='road');
+      const sites=this.state.sites.filter(s=>s.home===side&&!this.board.tiles[s.tile].sea),roads=sites.filter(s=>s.kind==='road');
       for(const s of sites){
         const near=roads.slice().sort((a,b)=>this.board.distance(s.tile,a.tile)-this.board.distance(s.tile,b.tile))[0];
         const path=this.board.route(s.tile,near.tile,k=>this.board.tiles[k].home===SIDE[side]);
-        for(const k of path?.path??[s.tile]){const t=this.board.tiles[k];t.road=true;t.rail=s.kind==='rail';t.roadSite=near.id;}
+        for(const k of path?.path??[s.tile]){const t=this.board.tiles[k];t.road=true;t.roadSite=near.id;}
       }
       for(let i=1;i<roads.length;i++){
         const route=this.board.route(roads[i-1].tile,roads[i].tile,k=>this.board.tiles[k].home===SIDE[side]);
@@ -213,29 +254,31 @@ export class Game {
   integrity(side='blue',kind=null){return mean(this.state.sites.filter(s=>s.home===side&&(!kind||s.kind===kind)).map(s=>s.health));}
   service(side,kind){return mean(this.state.sites.filter(s=>this.owned(s.tile,side)&&s.kind===kind).map(s=>s.health))/100;}
   roadQuality(id){const t=this.board.tiles[id];return t.road?(this.state.sites.find(s=>s.id===t.roadSite)?.health??100)/100:0;}
-  moveCost(unit,id){
-    const t=this.board.tiles[id];if(t.sea)return this.state.weather==='폭풍'?1.7:1;
-    const terrain=t.legacyTerrain==='mountain'?1.9:1;
+  moveCost(unit,id,from=null){
+    const t=this.board.tiles[id];if(t.sea&&!t.railBridge||TYPES[unit.type].domain==='sea')return this.state.weather==='폭풍'?1.7:1;
+    const terrain=t.terrain==='mountain'?1.9:1;
     const road=t.road?1.8-1.15*this.roadQuality(id):1;
     const fuel=.7+.3*this.service(unit.side,'energy');
     const supply=unit.supply<30?1.5:unit.supply<60?1.15:1;
-    return terrain*road*supply/fuel*(this.state.weather==='강우'?1.18:1);
+    const transport=from!==null&&this.board.railLinked(from,id)?Math.min(road,.55):road;
+    return terrain*transport*supply/fuel*(this.state.weather==='강우'?1.18:1);
   }
-  canEnter(unit,id){
+  canEnter(unit,id,from=unit.tile){
     const t=this.board.tiles[id];if(!t||t.foreign)return false;
     const domain=TYPES[unit.type].domain;
     if(domain==='air')return false;
-    if((domain==='sea')!==t.sea)return false;
+    if((domain==='sea')!==t.sea&&!(domain==='land'&&t.railBridge&&this.board.railLinked(from,id)))return false;
+    if(domain==='land'&&this.board.tiles[from]?.railBridge&&!this.board.railLinked(from,id))return false;
     if(this.at(id).some(u=>u.side!==unit.side)||this.responsible(id,unit.side==='blue'?'red':'blue'))return false;
     if(['supply','airdefense'].includes(unit.type)&&!this.owned(id,unit.side))return false;
     return true;
   }
-  route(unit,target){return this.board.route(unit.tile,target,id=>this.canEnter(unit,id),id=>this.moveCost(unit,id));}
+  route(unit,target){return this.board.route(unit.tile,target,(id,from)=>this.canEnter(unit,id,from),(id,from)=>this.moveCost(unit,id,from));}
   reachable(unit){
     const dist=new Map([[unit.tile,0]]),heap=new Heap();heap.push(unit.tile,0);
     if(unit.embarked||unit.type==='air')return dist;
     while(heap.length){const [id,d]=heap.pop();if(d!==dist.get(id))continue;for(const n of this.board.links[id]){
-      if(!this.canEnter(unit,n))continue;const nd=d+this.moveCost(unit,n);if(nd>unit.ap+.0001||nd>=(dist.get(n)??Infinity))continue;
+      if(!this.canEnter(unit,n,id))continue;const nd=d+this.moveCost(unit,n,id);if(nd>unit.ap+.0001||nd>=(dist.get(n)??Infinity))continue;
       dist.set(n,nd);heap.push(n,nd);
     }}return dist;
   }
@@ -249,10 +292,10 @@ export class Game {
   move(id,target){
     const u=this.unit(id);if(!this.active(u))return {ok:false,message:'현재 이동할 수 없는 부대입니다.'};
     if(target===u.tile)return {ok:false,message:'현재 위치입니다.'};
-    if(!this.canEnter(u,target))return {ok:false,message:'해당 지형 또는 외국 영토로 이동할 수 없습니다.'};
+    if(!this.canEnter(u,target)&&!this.board.tiles[target]?.railBridge)return {ok:false,message:'해당 지형 또는 외국 영토로 이동할 수 없습니다.'};
     const route=this.route(u,target);if(!route)return {ok:false,message:'이동 경로가 없습니다.'};
     let spent=0,count=0;
-    for(const k of route.path.slice(1)){const c=this.moveCost(u,k);if(spent+c>u.ap+.0001)break;spent+=c;u.tile=k;count++;this.capture(u,k);}
+    for(const k of route.path.slice(1)){const c=this.moveCost(u,k,u.tile);if(spent+c>u.ap+.0001)break;spent+=c;u.tile=k;count++;this.capture(u,k);}
     if(!count)return {ok:false,message:'이번 턴의 이동력이 부족합니다.'};
     u.ap=Math.max(0,u.ap-spent);u.entrenched=false;
     if(u.passenger)this.unit(u.passenger).tile=u.tile;
@@ -264,16 +307,17 @@ export class Game {
     const dist=new Float32Array(this.board.tiles.length).fill(Infinity),parent=new Int32Array(dist.length).fill(-1),heap=new Heap();
     const logistics=.25+.75*Math.min(this.service(side,'power'),this.service(side,'energy'),.4+.6*this.service(side,'rail'));
     for(const s of this.state.sites){
-      if(!['port','rail'].includes(s.kind)||s.health<20||!this.owned(s.tile,side))continue;
+      if(!['city','port','rail'].includes(s.kind)||s.health<20||!this.owned(s.tile,side))continue;
       const cost=(100-s.health)*.17;dist[s.tile]=cost;heap.push(s.tile,cost);
     }
     for(const u of this.alive(side).filter(u=>u.type==='supply'&&u.cargo>0&&!u.embarked)){
       if(dist[u.tile]>12){dist[u.tile]=12;heap.push(u.tile,12);}
     }
     while(heap.length){const [id,d]=heap.pop();if(d>dist[id]+.001||d>38)continue;
-      for(const n of this.board.links[id]){const t=this.board.tiles[n];if(t.sea||t.foreign||!this.owned(n,side))continue;
+      for(const n of this.board.links[id]){const t=this.board.tiles[n];if((t.sea&&!(t.railBridge&&this.board.railLinked(id,n)))||t.foreign||!this.owned(n,side))continue;
         if(this.at(n).some(u=>u.side!==side))continue;
-        const cost=(t.legacyTerrain==='mountain'?1.6:1)*(t.road?2.2-1.5*this.roadQuality(n):1.35)/logistics;
+        const transport=this.board.railLinked(id,n)?.45:t.road?2.2-1.5*this.roadQuality(n):1.35;
+        const cost=(t.terrain==='mountain'?1.6:1)*transport/logistics;
         const nd=d+cost;if(nd>38||nd>=dist[n])continue;dist[n]=nd;parent[n]=id;heap.push(n,nd);
       }
     }
@@ -320,7 +364,7 @@ export class Game {
     const factors={careful:.82,balanced:1,push:1.2};
     const cover=this.alive(u.side).some(a=>a.type==='air'&&a.mission==='support')?1.2:1;
     const a=this.spec(u).attack*(attackPower.committed/100)*(.35+.65*u.supply/100)*factors[posture]*cover;
-    const terrain=this.board.tiles[tile].legacyTerrain==='mountain'?1.28:1;
+    const terrain=this.board.tiles[tile].terrain==='mountain'?1.28:1;
     const d=this.spec(v).defense*(v.sector?defensePower.committed/100:(.3+.7*v.hp/100))*(.45+.55*v.supply/100)*terrain*(v.entrenched?1.3:1);
     const ratio=a/Math.max(1,d);
     const low=this.combatDamage(u,v,tile,ratio,1),high=this.combatDamage(u,v,tile,ratio,6);
@@ -540,19 +584,19 @@ export class Game {
 
       if(initialDist>1||isGarrison){
         for(let step=0;step<3;step++){
-          const options=this.board.links[u.tile].filter(k=>this.canEnter(u,k)&&this.moveCost(u,k)<=u.ap);
+          const options=this.board.links[u.tile].filter(k=>this.canEnter(u,k)&&this.moveCost(u,k,u.tile)<=u.ap);
           if(!options.length)break;
           options.sort((a,b)=>{
             const da=this.board.distance(a,goalTile);
             const db=this.board.distance(b,goalTile);
             if(da!==db)return da-db;
-            const ta=this.board.tiles[a].legacyTerrain==='mountain'?-1:0;
-            const tb=this.board.tiles[b].legacyTerrain==='mountain'?-1:0;
+            const ta=this.board.tiles[a].terrain==='mountain'?-1:0;
+            const tb=this.board.tiles[b].terrain==='mountain'?-1:0;
             return ta-tb;
           });
           const nextTile=options[0];
           if(nextTile===undefined||this.board.distance(nextTile,goalTile)>=this.board.distance(u.tile,goalTile))break;
-          u.ap-=this.moveCost(u,nextTile);
+          u.ap-=this.moveCost(u,nextTile,u.tile);
           u.tile=nextTile;
           this.capture(u,nextTile);
         }
@@ -644,42 +688,10 @@ export class Game {
     if(typeof text!=='string'||text.length>2_000_000)throw Error('저장 파일 크기가 올바르지 않습니다.');
     const s=JSON.parse(text);
     if(!s||typeof s!=='object')throw Error('지원하지 않는 저장 파일입니다.');
-    // Validate the complete old save on its original grid before converting anything.
-    if(s.version===1&&this.board.cols!==120){
-      const old=new Game(s.seed,s.scenario??'legacy',new Board(GEOGRAPHY.legacyMap));
-      old.import(text);
-      const fresh=new Game(s.seed,s.scenario??'legacy',new Board(this.board.geography)).state;
-      const nearest=(tile,predicate)=>{
-        const origin=old.board.tiles[tile];let best=null,d=Infinity;
-        for(const t of this.board.tiles){if(!predicate(t))continue;const dd=(t.legacyX-origin.legacyX)**2+(t.legacyY-origin.legacyY)**2;if(dd<d){best=t;d=dd;}}
-        if(!best)throw Error('이전 부대 위치를 변환하지 못했습니다.');
-        return best.id;
-      };
-      s.control=this.board.tiles.map(t=>{
-        if(t.sea||t.foreign)return t.home;
-        const k=old.board.legacyClosest(t.legacyX,t.legacyY),prior=old.board.tiles[k];
-        return prior&&prior.home===t.home?s.control[k]:t.home;
-      });
-      for(const u of s.units){
-        const prior=old.board.tiles[u.tile];
-        const site=s.sites.find(v=>v.tile===u.tile);
-        const port=prior.sea?s.sites.find(v=>v.kind==='port'&&old.board.distance(v.tile,u.tile)===1):null;
-        if(site)u.tile=fresh.sites.find(v=>v.id===site.id).tile;
-        else if(port){
-          const anchor=fresh.sites.find(v=>v.id===port.id).tile;
-          u.tile=nearest(u.tile,t=>t.sea&&this.board.links[anchor].includes(t.id));
-        }else u.tile=nearest(u.tile,t=>t.home===prior.home);
-      }
-      for(const u of s.units)if(u.sector)u.sector.allocations=u.sector.allocations.map(a=>({...a,tile:nearest(a.tile,t=>!t.sea&&!t.foreign)}));
-      for(const u of s.units)if(u.embarked)u.tile=s.units.find(v=>v.id===u.embarked).tile;
-      for(const site of s.sites)site.tile=fresh.sites.find(v=>v.id===site.id).tile;
-      for(const objective of s.objectives)objective.tile=fresh.objectives.find(v=>v.id===objective.id).tile;
-      s.version=VERSION;
-      return this.import(JSON.stringify(s));
-    }
+    if(s.version!==VERSION||s.mapId!==this.board.geography.id)throw Error('이전 동아시아 지도 저장은 호환되지 않습니다. 한반도 새 게임을 시작하세요.');
     const scenario=s.scenario??'legacy';
     if(!['legacy',ARMY_SCENARIO].includes(scenario)||(scenario===ARMY_SCENARIO&&s.datasetVersion!==ARMY_DATA.dataset_version))throw Error('지원하지 않는 편제 데이터 버전입니다.');
-    if(s.version!==(this.board.cols===120?1:VERSION)||!Number.isInteger(s.turn)||s.turn<1||s.turn>46||s.phase!=='player'||!Array.isArray(s.control)||s.control.length!==this.board.tiles.length)throw Error('지원하지 않는 저장 파일입니다.');
+    if(s.version!==VERSION||!Number.isInteger(s.turn)||s.turn<1||s.turn>46||s.phase!=='player'||!Array.isArray(s.control)||s.control.length!==this.board.tiles.length)throw Error('지원하지 않는 저장 파일입니다.');
     for(let i=0;i<s.control.length;i++){
       const home=this.board.tiles[i].home,value=s.control[i];
       if(home===0?value!==0:home===3?value!==3:![1,2].includes(value))throw Error('지도 통제 데이터가 손상되었습니다.');
@@ -700,7 +712,7 @@ export class Game {
       const original=template.units.find(v=>v.id===u.id);
       if(!original||unitIds.has(u.id)||u.type!==original.type||u.side!==original.side||typeof u.name!=='string'||u.name.length>80)throw Error('부대 구성이 올바르지 않습니다.');unitIds.add(u.id);
       if(u.formationId!==original.formationId||(u.formationId&&u.name!==original.name)||['mobility','firepower','armor','reconnaissance','logistics','gameSpec','stat_profile'].some(k=>k in u))throw Error('편제 참조 데이터가 올바르지 않습니다.');
-      const t=this.board.tiles[u.tile];if(!Number.isInteger(u.tile)||!t||t.foreign||(u.hp>0&&!u.embarked&&TYPES[u.type].domain!=='air'&&(TYPES[u.type].domain==='sea')!==t.sea))throw Error('부대 위치가 올바르지 않습니다.');
+      const t=this.board.tiles[u.tile];if(!Number.isInteger(u.tile)||!t||t.foreign||(u.hp>0&&!u.embarked&&TYPES[u.type].domain!=='air'&&(TYPES[u.type].domain==='sea')!==t.sea&&!t.railBridge))throw Error('부대 위치가 올바르지 않습니다.');
       if(!validNum(u.hp,0,100)||!validNum(u.supply,0,100)||!validNum(u.ap,0,20)||!validNum(u.cargo,0,100)||![null,'patrol','recon','support'].includes(u.mission)||typeof u.acted!=='boolean'||typeof u.entrenched!=='boolean')throw Error('부대 상태가 올바르지 않습니다.');
     }
     for(const u of s.units){
