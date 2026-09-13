@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {Game,TYPES,SITE_TYPES,clamp} from '../app/src/main/assets/game/engine.js';
 import {GEOGRAPHY} from '../app/src/main/assets/game/geography.js';
+import {worldToScreen,screenToWorld} from '../app/src/main/assets/game/hex.js';
 import {ARMY_DATA,ARMY_SCENARIO,armyFormation,armyChildren,armyTile} from '../app/src/main/assets/game/army.js';
 
 // Exercise the real UI event handlers against the real engine. Only the DOM and
@@ -13,7 +14,7 @@ function ui(){
  const context=new Proxy({},{get:(_,key)=>(...args)=>paint.push([key,...args]),set:()=>true});
  const node=id=>{if(!nodes.has(id))nodes.set(id,{id,dataset:{},style:{},classList:{add(){},remove(){},toggle(){}},innerHTML:'',textContent:'',hidden:false,open:false,
    getContext:()=>context,getBoundingClientRect:()=>({width:1280,height:720}),addEventListener:(type,fn)=>events.set(id+':'+type,fn),setPointerCapture(){},showModal(){this.open=true;},close(){this.open=false;}});return nodes.get(id);};
- const saved=new Map(),sandbox=vm.createContext({Game,TYPES,SITE_TYPES,clamp,GEOGRAPHY,ARMY_DATA,ARMY_SCENARIO,armyFormation,armyChildren,armyTile,
+ const saved=new Map(),sandbox=vm.createContext({Game,TYPES,SITE_TYPES,clamp,GEOGRAPHY,worldToScreen,screenToWorld,ARMY_DATA,ARMY_SCENARIO,armyFormation,armyChildren,armyTile,
   document:{getElementById:node,createElement:()=>node('offscreen'),querySelectorAll:()=>[],addEventListener:(type,fn)=>events.set('document:'+type,fn),fonts:{ready:Promise.resolve()}},
   window:{addEventListener(){}},Image:class{},ResizeObserver:class{observe(){}},devicePixelRatio:1,
   localStorage:{setItem:(k,v)=>saved.set(k,v),getItem:k=>saved.get(k)},setTimeout:()=>1,clearTimeout(){},requestAnimationFrame(){},console});
@@ -23,7 +24,7 @@ function ui(){
  const unit=game.alive('blue').find(u=>game.isDivision(u));
  const click=data=>events.get('document:click')({target:{closest:()=>({dataset:data})}});
  const tile=id=>run(`{const t=game.board.tiles[${id}],p=screen(t.x,t.y);mapClick(p.x,p.y);}`);
- const hit=id=>{run(`hitUnits=[{id:${JSON.stringify(id)},x:300,y:300,r:22}]`);run('mapClick(300,300)');};
+ const hit=id=>run(`{const u=game.unit(${JSON.stringify(id)}),t=game.board.tiles[u.tile],p=screen(t.x,t.y);hitUnits=[{id:u.id,x:p.x,y:p.y,r:22}];mapClick(p.x,p.y);}`);
  return {run,game,unit,node,events,click,tile,hit,paint,saved};
 }
 

@@ -1,4 +1,5 @@
 import { GEOGRAPHY } from './geography.js';
+import { worldToScreen, screenToWorld } from './hex.js';
 import { Game, TYPES, SITE_TYPES, clamp } from './engine.js';
 import { ARMY_DATA, ARMY_SCENARIO, armyFormation, armyChildren, armyTile } from './army.js';
 
@@ -21,29 +22,33 @@ for(const region of Object.values(ARMY_DATA.regions)){
  const id=game.board.id(region.hex.q,region.hex.r);
  armyRegionTiles.set(id,[...(armyRegionTiles.get(id)||[]),region.name]);
 }
-const off=document.createElement('canvas');off.width=game.board.width+30;off.height=game.board.height+30;const oc=off.getContext('2d');
+const off=document.createElement('canvas');off.width=Math.ceil(game.board.width);off.height=Math.ceil(game.board.height);const oc=off.getContext('2d');
 const state=()=>game.state;
 function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),3500);}
 function autosave(){try{localStorage.setItem('peninsula-autosave-v1',game.export());return true;}catch{return false;}}
 function save(){toast(autosave()?'현재 진행을 저장했습니다.':'저장 공간을 사용할 수 없습니다. 메뉴에서 파일로 내보내세요.');}
 function execute(result){if(result.ok){reachable=selected?game.reachable(game.unit(selected)):new Map();autosave();render();}toast(result.message);dirty=true;}
-function countryPath(context,poly){context.beginPath();for(const ring of poly){ring.forEach(([lon,lat],i)=>{const p=game.board.project(lon,lat);i?context.lineTo(p.x,p.y):context.moveTo(p.x,p.y);});context.closePath();}}
 function baseMap(){
  $('map-caption').textContent=`${game.board.cols} × ${game.board.rows} HEX · ${game.board.tiles.length.toLocaleString('en-US')} TILES`;
- oc.fillStyle='#0e2633';oc.fillRect(0,0,off.width,off.height);
- oc.lineWidth=.7;oc.strokeStyle='#28404c';
- for(let lon=118;lon<148;lon+=2){const a=game.board.project(lon,24),b=game.board.project(lon,46);oc.beginPath();oc.moveTo(a.x,a.y);oc.lineTo(b.x,b.y);oc.stroke();}
- for(let lat=24;lat<47;lat+=2){const a=game.board.project(118,lat),b=game.board.project(147,lat);oc.beginPath();oc.moveTo(a.x,a.y);oc.lineTo(b.x,b.y);oc.stroke();}
- for(const c of GEOGRAPHY.countries){oc.fillStyle=c.id==='410'?'#284c51':c.id==='408'?'#4e3e42':'#283139';oc.strokeStyle=c.id==='410'?'#64868b':c.id==='408'?'#8b6a6d':'#46515a';oc.lineWidth=1.2;for(const p of c.polygons){countryPath(oc,p);oc.fill('evenodd');oc.stroke();}}
- for(const t of game.board.tiles.filter(t=>[1,2].includes(t.home)&&t.terrain==='mountain')){oc.fillStyle=t.home===1?'#35585870':'#66505370';hex(oc,t,.8);oc.fill();}
- for(const t of game.board.tiles.filter(t=>t.road)){oc.strokeStyle=t.home===1?'#80968d65':'#ad938765';oc.lineWidth=t.rail?1.9:1;for(const n of game.board.links[t.id])if(game.board.tiles[n].road){oc.beginPath();oc.moveTo(t.x,t.y);oc.lineTo(game.board.tiles[n].x,game.board.tiles[n].y);oc.stroke();}}
- for(const [name,lon,lat] of GEOGRAPHY.islands){const p=game.board.project(lon,lat);oc.fillStyle='#527c79';oc.beginPath();oc.ellipse(p.x,p.y,2.6,2,0,0,Math.PI*2);oc.fill();}
+ oc.clearRect(0,0,off.width,off.height);
+ drawTileMap(oc,game.board.tiles);
 }
-function hex(c,t,k=1){const rx=game.board.dx/1.5*k,ry=game.board.dy*.5*k;c.beginPath();[[-1,0],[-.5,-1],[.5,-1],[1,0],[.5,1],[-.5,1]].forEach(([x,y],i)=>i?c.lineTo(t.x+x*rx,t.y+y*ry):c.moveTo(t.x+x*rx,t.y+y*ry));c.closePath();}
-function world(x,y){return {x:(x-width/2)/camera.zoom+camera.x,y:(y-height/2)/camera.zoom+camera.y};}
-function screen(x,y){return {x:(x-camera.x)*camera.zoom+width/2,y:(y-camera.y)*camera.zoom+height/2};}
+function drawTileMap(context,tiles){
+ // Every visible landmass comes from the existing ownership tiles, not polygons.
+ const colors=['#0e2633','#284c51','#4e3e42','#283139'];
+ for(const t of tiles){context.fillStyle=colors[t.home];hex(context,t);context.fill();context.strokeStyle=colors[t.home];context.lineWidth=.3;context.stroke();}
+ context.beginPath();
+ for(const coast of game.board.coastlines){const [a,b]=game.board.layout.edge(game.board.tiles[coast.tile],coast.direction);context.moveTo(a.x,a.y);context.lineTo(b.x,b.y);}
+ context.strokeStyle='#78999e';context.lineWidth=context===oc?1:1.5/camera.zoom;context.stroke();
+ // Existing fictional infrastructure remains visible; future edge data stays empty.
+ for(const t of tiles.filter(t=>t.road)){context.strokeStyle=t.home===1?'#80968d65':'#ad938765';context.lineWidth=t.rail?1.9:1;for(const n of game.board.links[t.id])if(game.board.tiles[n].road){context.beginPath();context.moveTo(t.x,t.y);context.lineTo(game.board.tiles[n].x,game.board.tiles[n].y);context.stroke();}}
+}
+function hex(c,t,k=1){game.board.layout.path(c,t,k);}
+function world(x,y){return screenToWorld({x,y},camera,width,height);}
+function screen(x,y){return worldToScreen({x,y},camera,width,height);}
+function minimapLayout(){const scale=Math.min(mini.width/game.board.width,mini.height/game.board.height);return {scale,x:(mini.width-game.board.width*scale)/2,y:(mini.height-game.board.height*scale)/2};}
 function fit(full=false){
- const a=game.board.project(full?118:123.5,full?46:43.3),b=game.board.project(full?147:132,full?24:32.2);
+ const a=full?{x:0,y:0}:game.board.project(123.5,43.3),b=full?{x:game.board.width,y:game.board.height}:game.board.project(132,32.2);
  camera.x=(a.x+b.x)/2;camera.y=(a.y+b.y)/2;camera.zoom=Math.min(width/(b.x-a.x),height/(b.y-a.y))*(full?.9:.9);dirty=true;
 }
 function centerTile(id){const t=game.board.tiles[id];camera.x=t.x;camera.y=t.y;camera.zoom=Math.max(camera.zoom,3);dirty=true;}
@@ -55,9 +60,10 @@ let hitUnits=[];
 function draw(){
  if(dirty&&width&&height){
   dirty=false;ctx.clearRect(0,0,width,height);ctx.fillStyle='#0b1e29';ctx.fillRect(0,0,width,height);
-  ctx.save();ctx.translate(width/2,height/2);ctx.scale(camera.zoom,camera.zoom);ctx.translate(-camera.x,-camera.y);ctx.drawImage(off,0,0);
+  ctx.save();ctx.translate(width/2,height/2);ctx.scale(camera.zoom,camera.zoom);ctx.translate(-camera.x,-camera.y);
   const tl=world(0,0),br=world(width,height),on=t=>t.x>=tl.x-30&&t.x<=br.x+30&&t.y>=tl.y-30&&t.y<=br.y+30;
   const tiles=game.board.tiles.filter(on);
+  if(camera.zoom>1)drawTileMap(ctx,tiles);else ctx.drawImage(off,0,0);
   for(const t of tiles){
    if(t.foreign||t.sea)continue;
    if(state().control[t.id]!==t.home){ctx.fillStyle=state().control[t.id]===1?'#4d99b990':'#ac5d6080';hex(ctx,t);ctx.fill();}
@@ -91,7 +97,7 @@ function draw(){
   if(state().scenario===ARMY_SCENARIO&&camera.zoom>=2.5){
    for(const [id,names] of armyRegionTiles){const t=game.board.tiles[id];if(!on(t))continue;const p=screen(t.x,t.y);textAt(names.join(' / '),p.x,p.y+47,'#e4c48a',9);}
   }
-  const mw=mini.width,mh=mini.height;mc.fillStyle='#10232e';mc.fillRect(0,0,mw,mh);mc.drawImage(off,0,0,mw,mh);mc.strokeStyle='#dfb578';mc.lineWidth=1;mc.strokeRect(tl.x/game.board.width*mw,tl.y/game.board.height*mh,(br.x-tl.x)/game.board.width*mw,(br.y-tl.y)/game.board.height*mh);
+  const mw=mini.width,mh=mini.height;mc.fillStyle='#10232e';mc.fillRect(0,0,mw,mh);const ml=minimapLayout();mc.drawImage(off,ml.x,ml.y,game.board.width*ml.scale,game.board.height*ml.scale);mc.strokeStyle='#dfb578';mc.lineWidth=1;mc.strokeRect(ml.x+tl.x*ml.scale,ml.y+tl.y*ml.scale,(br.x-tl.x)*ml.scale,(br.y-tl.y)*ml.scale);
  }
  requestAnimationFrame(draw);
 }
@@ -124,7 +130,7 @@ function mapClick(x,y){
 let pointers=new Map(),dragStart=null,lastPinch=0,moved=false;
 canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});if(pointers.size===1){dragStart={x:e.offsetX,y:e.offsetY,cx:camera.x,cy:camera.y};moved=false;}else {moved=true;if(pointers.size===2){const p=[...pointers.values()];lastPinch=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);}}});
 canvas.addEventListener('pointermove',e=>{
- const p=world(e.offsetX,e.offsetY),t=game.board.closest(p.x,p.y);if(t>=0)$('coordinate-label').textContent=`HEX ${game.board.tiles[t].q.toString().padStart(3,'0')} · ${game.board.tiles[t].r.toString().padStart(3,'0')}`;
+ const p=world(e.offsetX,e.offsetY),t=game.board.closest(p.x,p.y);if(t>=0)$('coordinate-label').textContent=`HEX ${game.board.tiles[t].axial.q.toString().padStart(3,'0')} · ${game.board.tiles[t].axial.r.toString().padStart(3,'0')}`;
  if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
  if(pointers.size===2){const a=[...pointers.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(lastPinch>0)zoom(d/lastPinch,(a[0].x+a[1].x)/2,(a[0].y+a[1].y)/2);lastPinch=d;moved=true;}
  else if(dragStart){const dx=e.offsetX-dragStart.x,dy=e.offsetY-dragStart.y;if(Math.hypot(dx,dy)>7)moved=true;if(moved){camera.x=dragStart.cx-dx/camera.zoom;camera.y=dragStart.cy-dy/camera.zoom;dirty=true;}}
@@ -133,7 +139,7 @@ canvas.addEventListener('pointerup',e=>{if(!moved&&pointers.size===1)mapClick(e.
 canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);dragStart=null;moved=true;lastPinch=0;});
 canvas.addEventListener('wheel',e=>{e.preventDefault();zoom(e.deltaY<0?1.15:1/1.15,e.offsetX,e.offsetY);},{passive:false});
 canvas.addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();camera.x+=e.key==='ArrowLeft'?-50/camera.zoom:e.key==='ArrowRight'?50/camera.zoom:0;camera.y+=e.key==='ArrowUp'?-50/camera.zoom:e.key==='ArrowDown'?50/camera.zoom:0;dirty=true;}if(e.key==='+')zoom(1.25);if(e.key==='-')zoom(.8);});
-mini.addEventListener('click',e=>{const r=mini.getBoundingClientRect();camera.x=(e.clientX-r.left)/r.width*game.board.width;camera.y=(e.clientY-r.top)/r.height*game.board.height;dirty=true;});
+mini.addEventListener('click',e=>{const r=mini.getBoundingClientRect();const ml=minimapLayout(),x=((e.clientX-r.left)/r.width*mini.width-ml.x)/ml.scale,y=((e.clientY-r.top)/r.height*mini.height-ml.y)/ml.scale;if(x<0||x>game.board.width||y<0||y>game.board.height)return;camera.x=x;camera.y=y;dirty=true;});
 const glyphs={attack:'<circle cx="12" cy="12" r="6"/><path d="M12 1v6m0 10v6M1 12h6m10 0h6"/>',defense:'<path d="m12 2 8 3v6c0 6-8 11-8 11S4 17 4 11V5Z"/>',hp:'<path d="M12 21 3 12C-2 4 8 0 12 7c4-7 14-3 9 5Z"/>',move:'<path d="m3 17 5-10 5 10 5-10m-4 0h4v4"/>',supply:'<path d="m3 7 9-5 9 5v11l-9 4-9-4Zm0 0 9 5 9-5M12 12v10"/>',eye:'<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12Z"/><circle cx="12" cy="12" r="3"/>',terrain:'<path d="m2 21 7-16 5 10 3-6 5 12ZM6 12l3 2 3-2"/>',sector:'<path d="M3 3h6m6 0h6v6m0 6v6h-6m-6 0H3v-6m0-6V3m4 9 4-4 6 8"/>',wait:'<path d="M8 4v16m8-16v16"/>',detail:'<path d="m6 15 6-6 6 6"/>'};
 const icon=name=>`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6">${glyphs[name]||glyphs.supply}</svg>`;
 function actionButtons(u){
@@ -154,7 +160,7 @@ function renderUnitControls(){
  const u=game.unit(selected),controls=$('unit-controls'),card=$('interaction-card');
  controls.hidden=!u;card.hidden=true;card.innerHTML='';
  if(u){const spec=game.spec(u),stat=(key,label,value)=>`<span class="unit-stat" title="${label}" aria-label="${label} ${value}">${icon(key)}<b>${value}</b></span>`;
-  controls.innerHTML=`<div class="unit-status-bar"><button class="unit-identity" data-action="center" title="지휘 위치로 이동"><img src="${symbolPath(u.side,unitSymbol(u))}" alt="${esc(TYPES[u.type].name)}"><span>${esc(u.name)}${u.sector?'<small>HQ</small>':''}</span></button><div class="unit-stats">${stat('attack','공격력',spec.attack)}${stat('defense','기본 방어력',spec.defense)}${stat('hp','현재/최대 전력',Math.round(u.hp)+'/100')}${stat('move','현재/최대 이동력',Number(u.ap.toFixed(1))+'/'+spec.mp)}${stat('supply','현재/최대 보급',Math.round(u.supply)+'/100')}${stat('eye','탐지',game.reconRadius(u))}${game.board.tiles[u.tile].terrain==='mountain'?stat('terrain','지형 방어 보너스','+28%'):''}</div><button class="detail-toggle" data-action="details" aria-label="부대 상세 정보" aria-expanded="${mode==='detail'&&panelOpen}">${icon('detail')}</button></div>${mode==='move'?actionButtons(u):''}`;
+  controls.innerHTML=`<div class="unit-status-bar"><button class="unit-identity" data-action="center" title="지휘 위치로 이동"><img src="${symbolPath(u.side,unitSymbol(u))}" alt="${esc(TYPES[u.type].name)}"><span>${esc(u.name)}${u.sector?'<small>HQ</small>':''}</span></button><div class="unit-stats">${stat('attack','공격력',spec.attack)}${stat('defense','기본 방어력',spec.defense)}${stat('hp','현재/최대 전력',Math.round(u.hp)+'/100')}${stat('move','현재/최대 이동력',Number(u.ap.toFixed(1))+'/'+spec.mp)}${stat('supply','현재/최대 보급',Math.round(u.supply)+'/100')}${stat('eye','탐지',game.reconRadius(u))}${game.board.tiles[u.tile].legacyTerrain==='mountain'?stat('terrain','지형 방어 보너스','+28%'):''}</div><button class="detail-toggle" data-action="details" aria-label="부대 상세 정보" aria-expanded="${mode==='detail'&&panelOpen}">${icon('detail')}</button></div>${mode==='move'?actionButtons(u):''}`;
  }
  if(mode==='sector'&&u){card.hidden=false;card.innerHTML=`<div class="boundary-editor"><strong>${icon('sector')}전투지경선 편집 <span>${sectorDraft.allocations.length}/64</span></strong><p>점선: 지정 가능 · 실선: 현재 · ✓: 편집 중</p><p>타일 추가·제거 시 전선 80% 균등 / 예비 20%</p><div class="confirm-actions"><button data-action="cancel">취소</button><button data-action="sector-confirm" class="primary">확정</button></div></div>`;}
  if(mode==='unload'){card.hidden=false;card.innerHTML='<div class="boundary-editor"><p>인접한 아군 해안 선택</p><button data-action="cancel">취소</button></div>';}

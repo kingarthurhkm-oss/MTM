@@ -7,7 +7,7 @@ import {ARMY_DATA} from '../app/src/main/assets/game/army.js';
 
 test('the Korean land span near the ceasefire-line latitude is at least twenty contiguous tiles',()=>{
  const b=new Board();
- const row=Math.round(b.project(127.5,38).y/b.dy);
+ const row=Math.round(b.legacyProject(127.5,38).y/b.legacyDy);
  const cols=b.tiles.filter(t=>t.r===row&&[1,2].includes(t.home)).map(t=>t.q).sort((a,b)=>a-b);
  let longest=0,run=0,last=-2;
  for(const q of cols){run=q===last+1?run+1:1;longest=Math.max(longest,run);last=q;}
@@ -20,7 +20,7 @@ test('municipality anchors stay on South Korean land near their original coarse 
   const before=old.tiles[old.id(region.legacyHex.q,region.legacyHex.r)];
   const after=current.tiles[current.id(region.hex.q,region.hex.r)];
   assert.equal(after.home,1);
-  assert.ok(Math.hypot(before.x-after.x,before.y-after.y)<old.dx*.5);
+  assert.ok(Math.hypot(before.legacyX-after.legacyX,before.legacyY-after.legacyY)<old.dx*.5);
  }
 });
 for(const scenario of ['legacy','army'])test(`v1 ${scenario} saves retain progress and valid geographic placement`,()=>{
@@ -34,7 +34,7 @@ for(const scenario of ['legacy','army'])test(`v1 ${scenario} saves retain progre
   assert.equal(a.home,b.home);
   const site=prior.sites.find(v=>v.tile===orig.tile);
   if(site)assert.equal(u.tile,g.state.sites.find(v=>v.id===site.id).tile);
-  else if(!a.sea)assert.ok(Math.hypot(a.x-b.x,a.y-b.y)<old.dx*2);
+  else if(!a.sea)assert.ok(Math.hypot(a.legacyX-b.legacyX,a.legacyY-b.legacyY)<old.dx*2);
   if(u.hp>0&&!u.embarked&&TYPES[u.type].domain!=='air')assert.equal(b.sea,TYPES[u.type].domain==='sea');
  }
  const loaded=new Game();loaded.import(g.export());assert.equal(loaded.export(),g.export());
