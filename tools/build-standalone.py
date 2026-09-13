@@ -15,7 +15,7 @@ css = (assets / 'style.css').read_text()
 font = base64.b64encode((assets / 'fonts/noto-sans-kr.woff2').read_bytes()).decode()
 css = css.replace('fonts/noto-sans-kr.woff2', 'data:font/woff2;base64,' + font)
 parts = []
-for name in ['geography.js', 'army-data.js', 'army.js', 'sectors.js', 'engine.js', 'ui.js']:
+for name in ['hex.js', 'geography.js', 'army-data.js', 'army.js', 'sectors.js', 'engine.js', 'ui.js']:
     js = (assets / name).read_text()
     js = re.sub(r'^import .+?;\n', '', js, flags=re.M)
     js = re.sub(r'^export ', '', js, flags=re.M)

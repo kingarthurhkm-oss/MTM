@@ -1,4 +1,5 @@
 import { GEOGRAPHY } from './geography.js';
+import { HexLayout, HEX_DIRECTIONS, offsetToAxial, axialToOffset, hexDistance, tileGeography } from './hex.js';
 import { ARMY_DATA, ARMY_SCENARIO, armyFormation, armyTile, armyUnitSpec } from './army.js';
 
 import { sectorStrength, sectorOwner, validateSector, applySectorLoss } from './sectors.js';
@@ -8,7 +9,7 @@ export const TYPES = {
   army: {name:'보병사단', domain:'land', mp:9, attack:17, defense:16, range:1},
   armor: {name:'기갑사단', domain:'land', mp:12, attack:22, defense:18, range:1},
   artillery: {name:'포병여단', domain:'land', mp:8, attack:23, defense:10, range:4},
-  air: {name:'전투비행단', domain:'air', mp:1, attack:19, defense:12, range:36},
+  air: {name:'전투비행단', domain:'air', mp:1, attack:19, defense:12, range:200},
   navy: {name:'해군전단', domain:'sea', mp:16, attack:21, defense:19, range:4},
   airdefense: {name:'방공여단', domain:'land', mp:7, attack:0, defense:15, range:9},
   transport: {name:'수송선단', domain:'sea', mp:15, attack:0, defense:8, range:0},
@@ -38,30 +39,47 @@ export class Board {
   constructor(geography=GEOGRAPHY){
     this.geography=geography;
     this.cols=geography.columns;this.rows=geography.rows;
-    this.width=2400;
+    this.legacyWidth=2400;
     this.mercTop=this.merc(46);this.mercBottom=this.merc(24);
-    this.height=this.width*(this.mercTop-this.mercBottom)/(29*Math.PI/180);
-    this.dx=this.width/(this.cols-1);this.dy=this.height/(this.rows-.5);
+    this.legacyHeight=this.legacyWidth*(this.mercTop-this.mercBottom)/(29*Math.PI/180);
+    this.legacyDx=this.legacyWidth/(this.cols-1);this.legacyDy=this.legacyHeight/(this.rows-.5);
+    this.layout=new HexLayout(this.legacyDx/1.5);
+    this.dx=this.layout.dx;this.dy=this.layout.dy;
+    Object.assign(this,this.layout.bounds(this.cols,this.rows));
     const owners=[];const r=geography.ownersRLE;
     for(let i=0;i<r.length;i+=2)for(let j=0;j<r[i+1];j++)owners.push(r[i]);
     this.tiles=owners.map((home,id)=>{
       const q=id%this.cols,row=Math.floor(id/this.cols);
       const rough=(Math.sin(q*2.9+row*.83)+Math.sin(row*.51-q*.77))>.72;
-      return {id,q,r:row,home,sea:home===0,foreign:home===3,terrain:home===0?'sea':home===3?'foreign':rough?'mountain':'plain',
-        x:q*this.dx,y:(row+(q%2)*.5)*this.dy,road:false,rail:false,roadSite:null};
+      // q/r and row-major IDs stay odd-q offset for saves and Army data.
+      // All geometry and graph distance use the explicit axial coordinate.
+      const axial=offsetToAxial(q,row);
+      return {id,q,r:row,axial,home,sea:home===0,foreign:home===3,...tileGeography(home===0?'sea':'land'),
+        legacyTerrain:home===0?'sea':home===3?'foreign':rough?'mountain':'plain',
+        ...this.layout.toWorld(axial),legacyX:q*this.legacyDx,legacyY:(row+(q%2)*.5)*this.legacyDy,
+        road:false,rail:false,roadSite:null};
     });
     this.links=this.tiles.map(t=>{
-      const delta=t.q%2?[[0,-1],[0,1],[-1,0],[-1,1],[1,0],[1,1]]:[[0,-1],[0,1],[-1,-1],[-1,0],[1,-1],[1,0]];
-      return delta.map(([x,y])=>this.id(t.q+x,t.r+y)).filter(i=>i>=0);
+      return HEX_DIRECTIONS.map((_,direction)=>this.neighbor(t.id,direction)).filter(i=>i>=0);
     });
+    this.coastlines=this.tiles.filter(t=>t.domain==='land').flatMap(t=>HEX_DIRECTIONS.flatMap((_,direction)=>{
+      const n=this.neighbor(t.id,direction);
+      return n>=0&&this.tiles[n].domain==='sea'?[{tile:t.id,neighbor:n,direction}]:[];
+    }));
   }
   merc(lat){return Math.log(Math.tan(Math.PI/4+lat*Math.PI/360));}
-  project(lon,lat){return {x:(lon-118)/29*this.width,y:(this.mercTop-this.merc(lat))/(this.mercTop-this.mercBottom)*this.height};}
+  legacyProject(lon,lat){return {x:(lon-118)/29*this.legacyWidth,y:(this.mercTop-this.merc(lat))/(this.mercTop-this.mercBottom)*this.legacyHeight};}
+  fromLegacy(x,y){return {x:this.layout.radius+x/this.legacyDx*this.dx,y:this.dy/2+y/this.legacyDy*this.dy};}
+  project(lon,lat){const p=this.legacyProject(lon,lat);return this.fromLegacy(p.x,p.y);}
   id(q,r){return q<0||r<0||q>=this.cols||r>=this.rows?-1:r*this.cols+q;}
-  cube(id){const t=this.tiles[id];const z=t.r-(t.q-(t.q&1))/2;return [t.q,-t.q-z,z];}
-  distance(a,b){if(a===b)return 0;const x=this.cube(a),y=this.cube(b);return Math.max(...x.map((v,i)=>Math.abs(v-y[i])));}
-  closest(x,y){let best=-1,d=Infinity;const col=Math.round(x/this.dx);const row=Math.round(y/this.dy);for(let q=col-2;q<=col+2;q++)for(let r=row-2;r<=row+2;r++){const id=this.id(q,r);if(id<0)continue;const t=this.tiles[id],dd=((t.x-x)/this.dx)**2+((t.y-y)/this.dy)**2;if(dd<d){d=dd;best=id;}}return best;}
-  nearest(lon,lat,predicate=()=>true){const p=this.project(lon,lat);let best=null,d=Infinity;for(const t of this.tiles){if(!predicate(t))continue;const dd=(t.x-p.x)**2+(t.y-p.y)**2;if(dd<d){d=dd;best=t;}}return best;}
+  axialId(axial){const p=axialToOffset(axial);return this.id(p.q,p.r);}
+  neighbor(id,direction){const a=this.tiles[id].axial,[q,r]=HEX_DIRECTIONS[direction];return this.axialId({q:a.q+q,r:a.r+r});}
+  cube(id){const {q,r}=this.tiles[id].axial;return [q,-q-r,r];}
+  distance(a,b){return hexDistance(this.tiles[a].axial,this.tiles[b].axial);}
+  closest(x,y){if(!Number.isFinite(x)||!Number.isFinite(y))return -1;return this.axialId(this.layout.fromWorld(x,y));}
+  // Old normalized picking is only for v1 save migration, never pointer input.
+  legacyClosest(x,y){let best=-1,d=Infinity;const col=Math.round(x/this.legacyDx),row=Math.round(y/this.legacyDy);for(let q=col-2;q<=col+2;q++)for(let r=row-2;r<=row+2;r++){const id=this.id(q,r);if(id<0)continue;const t=this.tiles[id],dd=((t.legacyX-x)/this.legacyDx)**2+((t.legacyY-y)/this.legacyDy)**2;if(dd<d){d=dd;best=id;}}return best;}
+  nearest(lon,lat,predicate=()=>true){const p=this.legacyProject(lon,lat);let best=null,d=Infinity;for(const t of this.tiles){if(!predicate(t))continue;const dd=(t.legacyX-p.x)**2+(t.legacyY-p.y)**2;if(dd<d){d=dd;best=t;}}return best;}
   within(id,radius){const t=this.tiles[id],out=[];for(let q=Math.max(0,t.q-radius);q<=Math.min(this.cols-1,t.q+radius);q++)for(let r=Math.max(0,t.r-radius*2);r<=Math.min(this.rows-1,t.r+radius*2);r++){const k=this.id(q,r);if(this.distance(id,k)<=radius)out.push(k);}return out;}
   route(start,end,allowed,cost=()=>1,limit=Infinity){
     const heap=new Heap(),dist=new Map([[start,0]]),prev=new Map();heap.push(start,0);
@@ -102,10 +120,10 @@ export class Game {
   owned(t,side){return this.state.control[t]===SIDE[side];}
   pick(side,fx,fy,used=new Set(),predicate=()=>true){
     const candidates=this.board.tiles.filter(t=>t.home===SIDE[side]&&predicate(t));
-    const xs=candidates.map(t=>t.x),ys=candidates.map(t=>t.y);
+    const xs=candidates.map(t=>t.legacyX),ys=candidates.map(t=>t.legacyY);
     const x=Math.min(...xs)+(Math.max(...xs)-Math.min(...xs))*fx;
     const y=Math.min(...ys)+(Math.max(...ys)-Math.min(...ys))*fy;
-    return candidates.filter(t=>!used.has(t.id)).sort((a,b)=>(a.x-x)**2+(a.y-y)**2-((b.x-x)**2+(b.y-y)**2))[0];
+    return candidates.filter(t=>!used.has(t.id)).sort((a,b)=>(a.legacyX-x)**2+(a.legacyY-y)**2-((b.legacyX-x)**2+(b.legacyY-y)**2))[0];
   }
   newGame(seed=2026,scenario=ARMY_SCENARIO){
     if(!['legacy',ARMY_SCENARIO].includes(scenario))throw Error('지원하지 않는 시나리오입니다.');
@@ -197,7 +215,7 @@ export class Game {
   roadQuality(id){const t=this.board.tiles[id];return t.road?(this.state.sites.find(s=>s.id===t.roadSite)?.health??100)/100:0;}
   moveCost(unit,id){
     const t=this.board.tiles[id];if(t.sea)return this.state.weather==='폭풍'?1.7:1;
-    const terrain=t.terrain==='mountain'?1.9:1;
+    const terrain=t.legacyTerrain==='mountain'?1.9:1;
     const road=t.road?1.8-1.15*this.roadQuality(id):1;
     const fuel=.7+.3*this.service(unit.side,'energy');
     const supply=unit.supply<30?1.5:unit.supply<60?1.15:1;
@@ -255,7 +273,7 @@ export class Game {
     while(heap.length){const [id,d]=heap.pop();if(d>dist[id]+.001||d>38)continue;
       for(const n of this.board.links[id]){const t=this.board.tiles[n];if(t.sea||t.foreign||!this.owned(n,side))continue;
         if(this.at(n).some(u=>u.side!==side))continue;
-        const cost=(t.terrain==='mountain'?1.6:1)*(t.road?2.2-1.5*this.roadQuality(n):1.35)/logistics;
+        const cost=(t.legacyTerrain==='mountain'?1.6:1)*(t.road?2.2-1.5*this.roadQuality(n):1.35)/logistics;
         const nd=d+cost;if(nd>38||nd>=dist[n])continue;dist[n]=nd;parent[n]=id;heap.push(n,nd);
       }
     }
@@ -302,7 +320,7 @@ export class Game {
     const factors={careful:.82,balanced:1,push:1.2};
     const cover=this.alive(u.side).some(a=>a.type==='air'&&a.mission==='support')?1.2:1;
     const a=this.spec(u).attack*(attackPower.committed/100)*(.35+.65*u.supply/100)*factors[posture]*cover;
-    const terrain=this.board.tiles[tile].terrain==='mountain'?1.28:1;
+    const terrain=this.board.tiles[tile].legacyTerrain==='mountain'?1.28:1;
     const d=this.spec(v).defense*(v.sector?defensePower.committed/100:(.3+.7*v.hp/100))*(.45+.55*v.supply/100)*terrain*(v.entrenched?1.3:1);
     const ratio=a/Math.max(1,d);
     const low=this.combatDamage(u,v,tile,ratio,1),high=this.combatDamage(u,v,tile,ratio,6);
@@ -528,8 +546,8 @@ export class Game {
             const da=this.board.distance(a,goalTile);
             const db=this.board.distance(b,goalTile);
             if(da!==db)return da-db;
-            const ta=this.board.tiles[a].terrain==='mountain'?-1:0;
-            const tb=this.board.tiles[b].terrain==='mountain'?-1:0;
+            const ta=this.board.tiles[a].legacyTerrain==='mountain'?-1:0;
+            const tb=this.board.tiles[b].legacyTerrain==='mountain'?-1:0;
             return ta-tb;
           });
           const nextTile=options[0];
@@ -633,13 +651,13 @@ export class Game {
       const fresh=new Game(s.seed,s.scenario??'legacy',new Board(this.board.geography)).state;
       const nearest=(tile,predicate)=>{
         const origin=old.board.tiles[tile];let best=null,d=Infinity;
-        for(const t of this.board.tiles){if(!predicate(t))continue;const dd=(t.x-origin.x)**2+(t.y-origin.y)**2;if(dd<d){best=t;d=dd;}}
+        for(const t of this.board.tiles){if(!predicate(t))continue;const dd=(t.legacyX-origin.legacyX)**2+(t.legacyY-origin.legacyY)**2;if(dd<d){best=t;d=dd;}}
         if(!best)throw Error('이전 부대 위치를 변환하지 못했습니다.');
         return best.id;
       };
       s.control=this.board.tiles.map(t=>{
         if(t.sea||t.foreign)return t.home;
-        const k=old.board.closest(t.x,t.y),prior=old.board.tiles[k];
+        const k=old.board.legacyClosest(t.legacyX,t.legacyY),prior=old.board.tiles[k];
         return prior&&prior.home===t.home?s.control[k]:t.home;
       });
       for(const u of s.units){
