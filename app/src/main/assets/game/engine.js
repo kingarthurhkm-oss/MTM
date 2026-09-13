@@ -452,6 +452,14 @@ export class Game {
     // 4. Execute ground & naval units
     for(const u of red.filter(x=>['army','armor','navy'].includes(x.type))){
       if(u.hp<=0)continue;
+      // Preserve existing sector AI behavior for units with sectors
+      if(u.sector&&!garrisons.has(u.id)){
+        const sectorTarget=blue.flatMap(v=>v.sector?.allocations.map(a=>a.tile)??[]).find(tile=>this.canAttackTile(u,tile));
+        if(sectorTarget!==undefined){this.attackTile(u.id,sectorTarget,true);continue;}
+        const local=u.sector.allocations.find(a=>this.canAttackTile(u,a.tile));
+        if(local){this.attackTile(u.id,local.tile,true);continue;}
+        continue;
+      }
       const domain=TYPES[u.type].domain;
       const isGarrison=garrisons.has(u.id);
       const targetObj=garrisons.get(u.id);
