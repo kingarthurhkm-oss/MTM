@@ -52,7 +52,7 @@ test('tile domains exactly retain RLE geography and coastlines contain every lan
  assert.deepEqual(board.tiles.map(t=>t.home),owners);
  const expected=new Set();
  for(const t of board.tiles){
-  assert.equal(t.domain,t.sea?'sea':'land');assert.equal(t.terrain,'plains');assert.equal(t.forest,false);assert.ok(['none','high'].includes(t.urban));
+  assert.equal(t.domain,t.sea?'sea':'land');assert.ok(['plains','hills','mountain'].includes(t.terrain));if(t.sea)assert.equal(t.terrain,'plains');assert.equal(t.forest,false);assert.ok(['none','high'].includes(t.urban));
   for(const key of ['riverEdges','roadEdges'])assert.deepEqual(t[key],[]);
   if(t.domain==='land')for(const n of board.links[t.id])if(board.tiles[n].sea)expected.add(`${t.id}:${n}`);
  }

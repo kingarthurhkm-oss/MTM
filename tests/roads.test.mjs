@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {drawTerrain} from '../app/src/main/assets/game/terrain.js';
 import {Game} from '../app/src/main/assets/game/engine.js';
 
 test('roads are exactly consecutive routed pairs, symmetric and adjacent; rebuild preserves rails',()=>{
@@ -45,8 +46,8 @@ test('actual map renderer draws road edges without filling adjacent road triangl
  const source=readFileSync(new URL('../app/src/main/assets/game/ui.js',import.meta.url),'utf8');
  const draw=source.slice(source.indexOf('function drawTileMap('),source.indexOf('\nfunction hex('));
  const lines=[];let start;
- const ctx={beginPath(){},fill(){},stroke(){},moveTo(x,y){start=[x,y];},lineTo(x,y){if(this.strokeStyle==='#80968d65'||this.strokeStyle==='#ad938765')lines.push([...start,x,y]);}};
- vm.runInNewContext(draw+';drawTileMap(context,game.board.tiles);',{game:g,context:ctx,oc:ctx,camera:{zoom:1},hex(){}});
+ const ctx={save(){},restore(){},closePath(){},quadraticCurveTo(){},beginPath(){},fill(){},stroke(){},moveTo(x,y){start=[x,y];},lineTo(x,y){if(this.strokeStyle==='#80968d65'||this.strokeStyle==='#ad938765')lines.push([...start,x,y]);}};
+ vm.runInNewContext(draw+';drawTileMap(context,game.board.tiles);',{drawTerrain,game:g,context:ctx,oc:ctx,camera:{zoom:1},hex(){}});
  const expected=b.tiles.flatMap(t=>t.roadEdges.map(d=>{const n=b.tiles[b.neighbor(t.id,d)];return [t.x,t.y,n.x,n.y];}));
  assert.deepEqual(lines,expected);
 });

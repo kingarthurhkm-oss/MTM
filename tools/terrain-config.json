@@ -1,0 +1,11 @@
+{
+  "zoom": 8,
+  "sampleStep": 0.2,
+  "coastalFootprintScales": [1, 1.5, 2, 3],
+  "mountainMedianMeters": 650,
+  "mountainReliefMeters": 450,
+  "mountainReliefMinMedianMeters": 150,
+  "hillsMedianMeters": 150,
+  "hillsReliefMeters": 120,
+  "hillsReliefMinMedianMeters": 40
+}

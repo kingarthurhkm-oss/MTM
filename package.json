@@ -6,7 +6,7 @@
   "type": "module",
   "description": "Offline fictional turn-based strategy game for Android",
   "scripts": {
-    "pretest": "python3 tools/build-korea-map.py --check && node tools/place-army-regions.mjs --check && python3 tools/build-army-data.py --check",
+    "pretest": "python3 tools/build-korea-map.py --check && python3 tools/build-terrain.py --check && node tools/place-army-regions.mjs --check && python3 tools/build-army-data.py --check",
     "build:army": "python3 tools/build-army-data.py",
     "test": "node --test tests/*.test.mjs",
     "preview": "python3 -m http.server 8080 --bind 127.0.0.1 --directory app/src/main/assets/game",

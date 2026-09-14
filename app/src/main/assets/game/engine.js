@@ -1,4 +1,5 @@
 import { GEOGRAPHY } from './geography.js';
+import { applyTerrain } from './terrain.js';
 import { HexLayout, HEX_DIRECTIONS, offsetToAxial, axialToOffset, hexDistance, tileGeography } from './hex.js';
 import { ARMY_DATA, ARMY_SCENARIO, armyFormation, armyTile, armyUnitSpec } from './army.js';
 
@@ -52,6 +53,7 @@ export class Board {
       return {id,q,r:row,axial,home,sea:home===0,foreign:false,...tileGeography(home===0?'sea':'land'),
         ...this.layout.toWorld(axial),road:false,rail:false,railBridge:false,roadSite:null};
     });
+    applyTerrain(this.tiles,geography);
     this.links=this.tiles.map(t=>HEX_DIRECTIONS.map((_,direction)=>this.neighbor(t.id,direction)).filter(i=>i>=0));
     this.coastlines=this.tiles.filter(t=>!t.sea).flatMap(t=>HEX_DIRECTIONS.flatMap((_,direction)=>{
       const n=this.neighbor(t.id,direction);

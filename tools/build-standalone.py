@@ -8,6 +8,7 @@ import sys
 root = Path(__file__).resolve().parents[1]
 subprocess.run([sys.executable, str(root / 'tools/build-korea-map.py'), '--check'], check=True)
 subprocess.run([sys.executable, str(root / 'tools/build-army-data.py'), '--check'], check=True)
+subprocess.run([sys.executable, str(root / 'tools/build-terrain.py'), '--check'], check=True)
 assets = root / 'app/src/main/assets/game'
 out = root / 'dist'
 out.mkdir(exist_ok=True)
@@ -16,7 +17,7 @@ css = (assets / 'style.css').read_text(encoding='utf-8')
 font = base64.b64encode((assets / 'fonts/noto-sans-kr.woff2').read_bytes()).decode()
 css = css.replace('fonts/noto-sans-kr.woff2', 'data:font/woff2;base64,' + font)
 parts = []
-for name in ['hex.js', 'geography.js', 'army-data.js', 'army.js', 'sectors.js', 'engine.js', 'ui.js']:
+for name in ['hex.js', 'geography.js', 'terrain-data.js', 'terrain.js', 'army-data.js', 'army.js', 'sectors.js', 'engine.js', 'ui.js']:
     js = (assets / name).read_text(encoding='utf-8')
     js = re.sub(r'^import .+?;\n', '', js, flags=re.M)
     js = re.sub(r'^export ', '', js, flags=re.M)

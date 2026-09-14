@@ -1,4 +1,5 @@
 import { GEOGRAPHY } from './geography.js';
+import { drawTerrain } from './terrain.js';
 import { worldToScreen, screenToWorld } from './hex.js';
 import { Game, TYPES, SITE_TYPES, clamp } from './engine.js';
 import { ARMY_DATA, ARMY_SCENARIO, armyFormation, armyChildren, armyTile } from './army.js';
@@ -37,6 +38,7 @@ function drawTileMap(context,tiles){
  // Every visible landmass comes from the existing ownership tiles, not polygons.
  const colors=['#0e2633','#284c51','#4e3e42','#283139'];
  for(const t of tiles){context.fillStyle=colors[t.home];hex(context,t);context.fill();context.strokeStyle=colors[t.home];context.lineWidth=.3;context.stroke();}
+ for(const t of tiles)drawTerrain(context,t,game.board.layout);
  context.beginPath();
  for(const coast of game.board.coastlines){const [a,b]=game.board.layout.edge(game.board.tiles[coast.tile],coast.direction);context.moveTo(a.x,a.y);context.lineTo(b.x,b.y);}
  context.strokeStyle='#78999e';context.lineWidth=context===oc?1:1.5/camera.zoom;context.stroke();
