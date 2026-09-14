@@ -24,9 +24,9 @@ test('movement follows a path and respects remaining movement points',()=>{
 });
 test('damaged roads, energy and supply create movement and combat penalties',()=>{
  const g=new Game(),u=g.alive('blue').find(u=>u.type==='army'),v=g.alive('red').find(u=>u.type==='army');
- const road=g.board.tiles.find(t=>t.home===1&&t.road);const normal=g.moveCost(u,road.id),ratio=g.combatPreview(u,v).ratio;
- g.state.sites.find(s=>s.id===road.roadSite).health=0;assert.ok(g.moveCost(u,road.id)>normal);
- u.supply=10;assert.ok(g.combatPreview(u,v).ratio<ratio);assert.ok(g.moveCost(u,road.id)>normal*1.4);
+ const road=g.board.tiles.find(t=>t.home===1&&t.roadEdges.some(d=>!g.board.railLinked(g.board.neighbor(t.id,d),t.id)));const from=g.board.neighbor(road.id,road.roadEdges.find(d=>!g.board.railLinked(g.board.neighbor(road.id,d),road.id)));const normal=g.moveCost(u,road.id,from),ratio=g.combatPreview(u,v).ratio;
+ g.state.sites.find(s=>s.id===road.roadSite).health=0;assert.ok(g.moveCost(u,road.id,from)>normal);
+ u.supply=10;assert.ok(g.combatPreview(u,v).ratio<ratio);assert.ok(g.moveCost(u,road.id,from)>normal*1.4);
 });
 test('destroyed logistics cut the supply field and repairs consume finite resources',()=>{
  const g=new Game(),u=g.alive('blue').find(u=>u.type==='army');assert.ok(g.supplyQuality(u)>0);

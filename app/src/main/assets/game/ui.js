@@ -42,7 +42,7 @@ function drawTileMap(context,tiles){
  context.strokeStyle='#78999e';context.lineWidth=context===oc?1:1.5/camera.zoom;context.stroke();
  // Draw precisely the same rail edges used by movement and supply.
  for(const t of tiles){
-  if(t.road){context.strokeStyle=t.home===1?'#80968d65':'#ad938765';context.lineWidth=1;for(const n of game.board.links[t.id])if(game.board.tiles[n].road){context.beginPath();context.moveTo(t.x,t.y);context.lineTo(game.board.tiles[n].x,game.board.tiles[n].y);context.stroke();}}
+  if(t.roadEdges.length){context.strokeStyle=t.home===1?'#80968d65':'#ad938765';context.lineWidth=1;for(const d of t.roadEdges){const n=game.board.neighbor(t.id,d);context.beginPath();context.moveTo(t.x,t.y);context.lineTo(game.board.tiles[n].x,game.board.tiles[n].y);context.stroke();}}
   for(const d of t.railEdges){const n=game.board.tiles[game.board.neighbor(t.id,d)];context.strokeStyle='#ddb66e';context.lineWidth=1.8;context.beginPath();context.moveTo(t.x,t.y);context.lineTo(n.x,n.y);context.stroke();}
  }
 }

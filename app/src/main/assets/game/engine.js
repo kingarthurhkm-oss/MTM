@@ -104,6 +104,7 @@ export class Board {
       const k=this.axialId({q:a.q+dq,r:a.r+dr});if(k>=0)out.push(k);
     }return out;
   }
+  roadLinked(from,to){return this.tiles[from]?.roadEdges.some(d=>this.neighbor(from,d)===to)??false;}
   railLinked(from,to){return this.tiles[from].railEdges.some(d=>this.neighbor(from,d)===to);}
   route(start,end,allowed,cost=()=>1,limit=Infinity){
     if(!this.tiles[start]||!this.tiles[end])return null;
@@ -238,16 +239,28 @@ export class Game {
   }
   rebuildRoads(){
     for(const t of this.board.tiles){t.road=false;t.roadSite=null;t.roadEdges=[];}
+    const recordPath=(path,site)=>{
+      for(const k of path){const t=this.board.tiles[k];t.road=true;t.roadSite=site;}
+      for(let i=1;i<path.length;i++){
+        const from=path[i-1],to=path[i];
+        const d=[0,1,2,3,4,5].find(d=>this.board.neighbor(from,d)===to);
+        if(d===undefined)throw Error('Non-adjacent road path');
+        const reverse=[0,1,2,3,4,5].find(d=>this.board.neighbor(to,d)===from);
+        if(!this.board.tiles[from].roadEdges.includes(d))this.board.tiles[from].roadEdges.push(d);
+        if(!this.board.tiles[to].roadEdges.includes(reverse))this.board.tiles[to].roadEdges.push(reverse);
+      }
+    };
     for(const side of ['blue','red']){
       const sites=this.state.sites.filter(s=>s.home===side&&!this.board.tiles[s.tile].sea),roads=sites.filter(s=>s.kind==='road');
       for(const s of sites){
         const near=roads.slice().sort((a,b)=>this.board.distance(s.tile,a.tile)-this.board.distance(s.tile,b.tile))[0];
+        if(!near)continue;
         const path=this.board.route(s.tile,near.tile,k=>this.board.tiles[k].home===SIDE[side]);
-        for(const k of path?.path??[s.tile]){const t=this.board.tiles[k];t.road=true;t.roadSite=near.id;}
+        recordPath(path?.path??[],near.id);
       }
       for(let i=1;i<roads.length;i++){
         const route=this.board.route(roads[i-1].tile,roads[i].tile,k=>this.board.tiles[k].home===SIDE[side]);
-        for(const k of route?.path??[]){this.board.tiles[k].road=true;this.board.tiles[k].roadSite=roads[i].id;}
+        recordPath(route?.path??[],roads[i].id);
       }
     }
   }
@@ -257,7 +270,7 @@ export class Game {
   moveCost(unit,id,from=null){
     const t=this.board.tiles[id];if(t.sea&&!t.railBridge||TYPES[unit.type].domain==='sea')return this.state.weather==='폭풍'?1.7:1;
     const terrain=t.terrain==='mountain'?1.9:1;
-    const road=t.road?1.8-1.15*this.roadQuality(id):1;
+    const road=from!==null&&this.board.roadLinked(from,id)?1.8-1.15*this.roadQuality(id):1;
     const fuel=.7+.3*this.service(unit.side,'energy');
     const supply=unit.supply<30?1.5:unit.supply<60?1.15:1;
     const transport=from!==null&&this.board.railLinked(from,id)?Math.min(road,.55):road;
@@ -316,7 +329,7 @@ export class Game {
     while(heap.length){const [id,d]=heap.pop();if(d>dist[id]+.001||d>38)continue;
       for(const n of this.board.links[id]){const t=this.board.tiles[n];if((t.sea&&!(t.railBridge&&this.board.railLinked(id,n)))||t.foreign||!this.owned(n,side))continue;
         if(this.at(n).some(u=>u.side!==side))continue;
-        const transport=this.board.railLinked(id,n)?.45:t.road?2.2-1.5*this.roadQuality(n):1.35;
+        const transport=this.board.railLinked(id,n)?.45:this.board.roadLinked(id,n)?2.2-1.5*this.roadQuality(n):1.35;
         const cost=(t.terrain==='mountain'?1.6:1)*transport/logistics;
         const nd=d+cost;if(nd>38||nd>=dist[n])continue;dist[n]=nd;parent[n]=id;heap.push(n,nd);
       }
