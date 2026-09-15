@@ -39,8 +39,9 @@ function drawTileMap(context,tiles){
  const colors=['#0e2633','#284c51','#4e3e42','#283139'];
  for(const t of tiles){context.fillStyle=colors[t.home];hex(context,t);context.fill();context.strokeStyle=colors[t.home];context.lineWidth=.3;context.stroke();}
  for(const t of tiles)drawTerrain(context,t,game.board.layout);
+ const visibleTiles=tiles.length===game.board.tiles.length?null:new Set(tiles.map(t=>t.id));
  context.beginPath();
- for(const coast of game.board.coastlines){const [a,b]=game.board.layout.edge(game.board.tiles[coast.tile],coast.direction);context.moveTo(a.x,a.y);context.lineTo(b.x,b.y);}
+ for(const coast of game.board.coastlines){if(visibleTiles&&!visibleTiles.has(coast.tile))continue;const [a,b]=game.board.layout.edge(game.board.tiles[coast.tile],coast.direction);context.moveTo(a.x,a.y);context.lineTo(b.x,b.y);}
  context.strokeStyle='#78999e';context.lineWidth=context===oc?1:1.5/camera.zoom;context.stroke();
  // Draw precisely the same rail edges used by movement and supply.
  for(const t of tiles){
@@ -64,7 +65,10 @@ function textAt(label,x,y,color,size=11){ctx.font=`${size}px "Noto KR",system-ui
 let hitUnits=[];
 function draw(){
  if(dirty&&width&&height){
-  dirty=false;ctx.clearRect(0,0,width,height);ctx.fillStyle='#0b1e29';ctx.fillRect(0,0,width,height);
+  dirty=false;
+  // Clear the full backing store independently of DPR/camera transforms so zoom frames can never accumulate.
+  ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.restore();
+  ctx.fillStyle='#0b1e29';ctx.fillRect(0,0,width,height);
   ctx.save();ctx.translate(width/2,height/2);ctx.scale(camera.zoom,camera.zoom);ctx.translate(-camera.x,-camera.y);
   const tl=world(0,0),br=world(width,height),on=t=>t.x>=tl.x-30&&t.x<=br.x+30&&t.y>=tl.y-30&&t.y<=br.y+30;
   const tiles=game.board.tiles.filter(on);
